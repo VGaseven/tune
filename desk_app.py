@@ -105,14 +105,15 @@ class App:
         self.more=RoundButton(self.ui,'Menu',W-px(20)-d/2,y,d,'menu',lambda:self.popup(self.menu_anchor()),c['chip'],c['text'],c['chiphover'])
         self.header_bottom=self.draw_tabs(W,y+d/2+px(12))
     def draw_tabs(self,W,y):
+        # Each tab is a full-area clickable, focusable, hover-animated segment (PillButton),
+        # not just clickable text. Selected = white (dark theme) / accent (light); others blend in.
         cv=self.content;c=self.look.c;px=self.look.px;tw=min(W-px(40),px(320));th=px(44);x0=(W-tw)/2;seg=tw/2
         rounded(cv,x0,y,tw,th,th/2,fill=c['chip'],outline='')
-        for i,(key,lbl,icon) in enumerate([('save','Settings','info'),('accounts','Accounts','people')]):
+        for i,(key,lbl) in enumerate([('save','Settings'),('accounts','Accounts')]):
             sx=x0+i*seg;sel=self.screen==key
-            if sel:rounded(cv,sx+px(4),y+px(4),seg-px(8),th-px(8),(th-px(8))/2,fill='#FFFFFF' if self.look.name=='dark' else c['accent'],outline='')
-            fg=('#09090B' if self.look.name=='dark' else '#FFFFFF') if sel else c['muted']
-            cv.create_text(sx+seg/2,y+th/2,text=lbl,font=(SEMI,11),fill=fg)
-            Hotspot(self.ui,'Tab: '+lbl,sx,y,seg,th,th/2,lambda k=key:self.show_screen(k),c['focus'])
+            if sel:fill='#FFFFFF' if self.look.name=='dark' else c['accent'];fg='#09090B' if self.look.name=='dark' else '#FFFFFF';hover=fill
+            else:fill=c['chip'];fg=c['muted'];hover=c['chiphover']
+            PillButton(self.ui,'Tab: '+lbl,sx+px(4),y+px(4),seg-px(8),th-px(8),lbl,lambda k=key:self.show_screen(k),fill,fg,hover,font=(SEMI,11))
         return y+th
     def menu_anchor(self):
         b=self.ui.find('Menu');cv=self.content
@@ -550,9 +551,14 @@ class App:
         g=clamp_geometry(list(geometry),work_areas(win),minimum);win.geometry(f'{g[0]}x{g[1]}+{g[2]}+{g[3]}');return g
     def fade(self,win):
         if not self.motion:return
+        # Cancel any in-flight fade so rapid tab switches can't strand alpha below 1.
+        for job in getattr(self,'_fade_jobs',[]):
+            try:win.after_cancel(job)
+            except tk.TclError:pass
+        self._fade_jobs=[]
         try:
             win.attributes('-alpha',0.0)
-            for i,a in enumerate((0.35,0.7,1.0)):win.after(30*(i+1),lambda a=a:win.winfo_exists() and win.attributes('-alpha',a))
+            for i,a in enumerate((0.4,0.75,1.0)):self._fade_jobs.append(win.after(28*(i+1),lambda a=a:win.winfo_exists() and win.attributes('-alpha',a)))
         except tk.TclError:pass
     def moved(self,event):
         if event.widget is not self.root or self.closed:return

@@ -141,7 +141,11 @@ class UI:
         canvas.bind('<Tab>',lambda e:self.move(1));canvas.bind('<Shift-Tab>',lambda e:self.move(-1))
         canvas.bind('<Return>',self.activate);canvas.bind('<space>',self.activate)
         canvas.bind('<FocusOut>',lambda e:self.set_focus(None,keep=True))
-    def reset(self):self.controls=[];self.focus=None
+    def reset(self):
+        for c in self.controls:
+            try:c._tip_cancel()
+            except (AttributeError,tk.TclError):pass
+        self.controls=[];self.focus=None
     def add(self,c):
         self.controls.append(c);cv=self.cv;t=c.tag
         cv.tag_bind(t,'<Enter>',lambda e:c.hover(True));cv.tag_bind(t,'<Leave>',lambda e:c.hover(False))
@@ -165,11 +169,42 @@ class UI:
 class Control:
     def __init__(self,ui,name,command):
         self.ui=ui;self.cv=ui.cv;self.name=name;self.command=command;self.state='normal'
-        self.over=self.pressed=self.focused=False;self.tag='ctl%d'%id(self)
+        self.over=self.pressed=self.focused=False;self.tag='ctl%d'%id(self);self.tip_text=None
     def hover(self,v):
         self.over=v;self.pressed=self.pressed and v
         self.cv.configure(cursor='hand2' if v and self.state!='disabled' else '');self.paint()
+        self._tip_schedule() if v else self._tip_cancel()
+    # ----- hover tooltip (a tiny Toplevel; never a canvas item, so it can't cause redraw loops) -----
+    def _tip_schedule(self):
+        self._tip_cancel()
+        if self.tip_text and self.state!='disabled':self._tip_job=self.cv.after(500,self._tip_show)
+    def _tip_cancel(self):
+        j=getattr(self,'_tip_job',None)
+        if j:
+            try:self.cv.after_cancel(j)
+            except tk.TclError:pass
+            self._tip_job=None
+        w=getattr(self,'_tip_win',None)
+        if w:
+            try:w.destroy()
+            except tk.TclError:pass
+            self._tip_win=None
+    def _tip_show(self):
+        self._tip_job=None
+        if not self.cv.winfo_exists() or self.state=='disabled' or not self.over:return
+        try:box=self.cv.bbox(getattr(self,'bg',None) or getattr(self,'track',self.tag))
+        except tk.TclError:box=None
+        if not box:return
+        c=self.ui.look.c
+        win=self._tip_win=tk.Toplevel(self.cv);win.wm_overrideredirect(True)
+        try:win.attributes('-topmost',True)
+        except tk.TclError:pass
+        tk.Label(win,text=self.tip_text,bg=c['surface2'],fg=c['text'],font=(TEXT,9),padx=8,pady=4,bd=0).pack()
+        win.update_idletasks()
+        x=self.cv.winfo_rootx()+(box[0]+box[2])//2-win.winfo_reqwidth()//2
+        y=self.cv.winfo_rooty()+box[3]+6;win.wm_geometry(f'+{max(0,x)}+{y}')
     def press(self):
+        self._tip_cancel()
         if self.state!='disabled':self.pressed=True;self.paint()
     def release(self):
         hit=self.pressed and self.over;self.pressed=False;self.paint()
@@ -181,7 +216,7 @@ class Control:
 class RoundButton(Control):
     """Dark circle with an icon glyph (header buttons, card buttons)."""
     def __init__(self,ui,name,cx,cy,d,icon,command,fill,fg,hover,ring='#A5B4FC'):
-        super().__init__(ui,name,command);cv=self.cv;self.colors=(fill,fg,hover,ring);r=d/2
+        super().__init__(ui,name,command);cv=self.cv;self.colors=(fill,fg,hover,ring);r=d/2;self.tip_text=name
         glyph,fallback=ICONS[icon];font=(ui.look.icons,int(d/3.4)) if ui.look.icons else (SEMI,int(d/4))
         self.ring=cv.create_oval(cx-r-3,cy-r-3,cx+r+3,cy+r+3,outline='',width=2,tags=(self.tag,))
         self.bg=cv.create_oval(cx-r,cy-r,cx+r,cy+r,fill=fill,outline='',tags=(self.tag,))
