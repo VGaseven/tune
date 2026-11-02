@@ -1,0 +1,19 @@
+# Build + tooling output
+build/
+dist/
+work/
+*.spec
+__pycache__/
+*.pyc
+*.ico
+hang.log
+
+# Local data / scratch (never publish)
+*.log
+exe-selftest.json
+source-selftest.json
+*-package-report.json
+
+# OS
+Thumbs.db
+desktop.ini

@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test-and-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+
+      - name: Run test suite
+        run: python -m unittest test_capture test_reference test_desk -v
+
+      - name: Import check
+        run: python -c "import desk_app, desk_skin, desk_profiles, desk_theme, capture_model"
+
+      - name: Install build deps
+        run: pip install -r requirements-build.txt
+
+      - name: Build Tune.exe
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name Tune desk_app.py
+
+      - name: Self-test the built EXE (synthetic data only)
+        shell: pwsh
+        run: |
+          $env:NOTEBOOK_TEST_REPORT = "exe-selftest.json"
+          Start-Process -FilePath dist/Tune.exe -ArgumentList "--self-test" -Wait
+          if (-not (Test-Path exe-selftest.json)) { throw "Self-test produced no report" }
+          $report = Get-Content exe-selftest.json -Raw
+          Write-Host $report
+          if (-not ($report -match '"result":\s*"PASS"')) { throw "Self-test did not PASS" }
+
+      - name: Upload Tune.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tune-windows-x64
+          path: dist/Tune.exe
+
+  release:
+    needs: test-and-build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Install build deps
+        run: pip install -r requirements-build.txt
+      - name: Build Tune.exe
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name Tune desk_app.py
+      - name: Checksum
+        shell: pwsh
+        run: (Get-FileHash dist/Tune.exe -Algorithm SHA256).Hash > dist/Tune.exe.sha256.txt
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/Tune.exe
+            dist/Tune.exe.sha256.txt
+          body: |
+            Tune — VALORANT video-settings manager (Windows, portable, unsigned).
+            Verify the download with the SHA-256 in Tune.exe.sha256.txt.
+            Tune is not affiliated with Riot Games.

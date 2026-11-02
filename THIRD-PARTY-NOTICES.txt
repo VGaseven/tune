@@ -1,0 +1,15 @@
+THIRD-PARTY NOTICES - Tune
+
+Tune.exe, when built, bundles the following, unmodified:
+- CPython 3.13 runtime and standard library (incl. tkinter, ctypes, zlib, libffi as shipped
+  with the python.org Windows build) - PSF License Agreement.
+- Tcl/Tk 8.6 - BSD-style license (Tcl uses the same terms).
+- PyInstaller bootloader - GPL 2.0 with an exception that permits distributing bundled
+  applications under any license.
+
+Fonts and icons come from Windows (Segoe UI Variable, Segoe Fluent Icons / MDL2 Assets) and
+are not bundled. The app icon is generated in code by desk_icon.py. No other code, images or
+assets are used.
+
+VALORANT and Riot Games are trademarks of Riot Games, Inc. Tune is not affiliated with,
+endorsed by, or sponsored by Riot Games.
