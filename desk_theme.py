@@ -2,7 +2,7 @@
 import ctypes
 import os
 
-VERSION='5.1';NAME='Tune'   # data folder stays %LOCALAPPDATA%\PresetDesk so 3.x profiles keep working
+VERSION='5.2';NAME='Tune'   # data folder stays %LOCALAPPDATA%\PresetDesk so 3.x profiles keep working
 # Near-black canvas, white headings, muted grey copy, indigo actions, magenta->purple hero
 # gradient and a smaller coral accent card, per the user's written description of the reference.
 PALETTES={

@@ -57,12 +57,29 @@ def card_png(w,h,r,look,bg):
     def chunk(kind,data):return struct.pack('>I',len(data))+kind+data+struct.pack('>I',zlib.crc32(kind+data)&0xffffffff)
     return b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',w,h,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(bytes(out),1))+chunk(b'IEND',b'')
 
+def dots_png(w,h,step,color,bg):
+    """Opaque PNG of the dot-grid background (single-pixel dots on bg). Built by poking pixels,
+    so it is fast even full-window, and lets the UI draw the background as one cached image
+    instead of ~1700 canvas items per redraw."""
+    w,h=int(w),int(h);step=max(2,int(step));dc=bytes(hex_rgb(color));rowbg=bytes(hex_rgb(bg))*w
+    rows=[bytearray(rowbg) for _ in range(h)];cx=step//2;xs=list(range(cx,w,step))
+    for y in range(cx,h,step):
+        r=rows[y]
+        for x in xs:r[x*3:x*3+3]=dc
+    raw=b''.join(b'\x00'+bytes(r) for r in rows)
+    def chunk(k,d):return struct.pack('>I',len(d))+k+d+struct.pack('>I',zlib.crc32(k+d)&0xffffffff)
+    return b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',w,h,8,2,0,0,0))+chunk(b'IDAT',zlib.compress(raw,1))+chunk(b'IEND',b'')
+
 class Images:
-    """Per-window cache so each card size/look is rendered once."""
+    """Per-window cache so each card size/look and background is rendered once."""
     def __init__(self,root):self.root=root;self.cache={}
     def card(self,w,h,r,look,bg):
-        key=(int(w),int(h),int(r),look,bg)
+        key=('card',int(w),int(h),int(r),look,bg)
         if key not in self.cache:self.cache[key]=tk.PhotoImage(master=self.root,data=base64.b64encode(card_png(w,h,r,look,bg)))
+        return self.cache[key]
+    def background(self,w,h,step,color,bg):
+        key=('bg',int(w),int(h),int(step),color,bg)
+        if key not in self.cache:self.cache[key]=tk.PhotoImage(master=self.root,data=base64.b64encode(dots_png(w,h,step,color,bg)))
         return self.cache[key]
 
 # 5x7 dot-matrix glyphs (hollow, airy strokes like the reference numerals).

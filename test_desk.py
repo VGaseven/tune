@@ -52,7 +52,8 @@ class FirstUseAndSave(DeskBase):
     def texts(self):
         cv=self.app.content;return [cv.itemcget(i,'text') for i in cv.find_all() if cv.type(i)=='text']
     def test_first_use_empty_state(self):
-        self.assertEqual(self.app.screen,'save');self.assertEqual(self.app.save_btn.text,'Set up & save');self.assertIn('Choose account',self.texts())
+        self.assertEqual(self.app.screen,'save');self.assertEqual(self.app.save_btn.text,'Set up & save');self.assertIn('No account',self.texts())
+        self.assertIn('Settings',self.texts());self.assertIn('Accounts',self.texts())   # tab bar is present
         self.app.show_screen('accounts');self.assertIn('No profiles yet',self.texts());self.assertEqual(self.app.apply_tile.state,'disabled')
         self.assertEqual(self.app.look.name,'dark');self.assertEqual(self.root.cget('bg'),desk_theme.PALETTES['dark']['bg'])
     def test_one_primary_save_action_on_main_screen(self):
@@ -125,12 +126,12 @@ class SignedInAccount(DeskBase):
         self.assertFalse(any(dp.account_of(p,self.config) is None for p in paths))
     def test_save_uses_signed_in_account_and_asks_name_only_once(self):
         made=self.accounts(self.A);self.app.refresh()
-        self.assertEqual((self.app.acct['label'],self.app.acct['signed'],self.app.save_btn.text),(None,True,'Name & save'))
+        self.assertEqual((self.app.acct['label'],self.app.acct['signed'],self.app.save_btn.text),(None,True,'Save this account'))
         with patch.object(self.app,'choose_source',return_value=(made[self.A],'DAISY')) as ask:self.app.save_settings();ask.assert_called_once()
-        self.assertEqual(self.app.acct['label'],'DAISY');self.assertEqual(self.app.save_btn.text,'Save settings')
+        self.assertEqual(self.app.acct['label'],'DAISY');self.assertTrue(self.app.acct['saved']);self.assertEqual(self.app.save_btn.text,'Update save')
         with patch.object(self.app,'choose_source',side_effect=AssertionError('named already')):self.app.save_settings()
         # Switching accounts in VALORANT: Save follows the game, never the old remembered folder.
-        self.accounts(self.B);self.app.refresh();self.assertEqual(self.app.save_btn.text,'Name & save')
+        self.accounts(self.B);self.app.refresh();self.assertEqual(self.app.save_btn.text,'Save this account')
         with patch.object(self.app,'choose_source',return_value=None) as ask:self.app.save_settings();ask.assert_called_once()
         self.assertEqual(len(self.app.items),1)
     def test_save_dialog_preselects_signed_in_but_apply_does_not(self):
@@ -142,6 +143,26 @@ class SignedInAccount(DeskBase):
             self.app.choose_source(paths,'save');self.app.choose_source(paths,'apply',m.capture(made[self.A],'X',self.config,lambda:None))
         i=paths.index(made[self.B]);self.assertEqual(seen[0][0],(i,));self.assertIn('signed in',seen[0][1][i])
         self.assertEqual(seen[1][0],());self.assertIn('signed in',seen[1][1][i])
+
+class SettingsSnapshot(DeskBase):
+    def test_settings_tab_shows_saved_snapshot_not_live_until_save(self):
+        src=self.source
+        with patch.object(self.app,'choose_source',return_value=(src,'Main')):self.app.save_settings()
+        saved=dict(self.app.acct['values']);self.assertTrue(self.app.acct['saved']);self.assertTrue(saved)
+        v=m.parse(FIXTURE)[2].copy();v['sg.TextureQuality']='0';src.write_bytes(m.merge(FIXTURE,v))  # game changes its file
+        self.app.refresh()
+        self.assertEqual(self.app.acct['values'],saved)                      # display does NOT auto-update
+        with patch.object(self.app,'choose_source',return_value=(src,'Main')):self.app.save_settings()
+        self.assertEqual(self.app.acct['values']['sg.TextureQuality'],'0')    # only Save updates it
+    def test_tab_bar_switches_screens(self):
+        self.app.show_screen('save');tabs=[c for c in self.app.ui.controls if c.name.startswith('Tab:')]
+        self.assertEqual(len(tabs),2)
+        next(c for c in tabs if 'Accounts' in c.name).invoke();self.assertEqual(self.app.screen,'accounts')
+        next(c for c in self.app.ui.controls if 'Settings' in c.name).invoke();self.assertEqual(self.app.screen,'save')
+    def test_background_is_one_cached_image_not_many_dots(self):
+        self.app.show_screen('save');cv=self.app.content
+        imgs=[i for i in cv.find_all() if cv.type(i)=='image']
+        self.assertTrue(imgs);self.assertLess(sum(1 for i in cv.find_all() if cv.type(i)=='oval'),400)  # dot grid no longer per-item
 
 class RiotLauncher(DeskBase):
     def write_manifest(self,pd,payload):
@@ -206,8 +227,8 @@ class ApplyAndUndo(DeskBase):
     def test_save_works_while_game_open_but_apply_does_not(self):
         def blocked():raise RuntimeError('Close VALORANT and Riot Client normally, then try again.')
         self.app.guard=blocked;before=self.target.read_bytes()
-        path=self.save();self.assertTrue(path.is_file());self.assertTrue(self.app.last_saved['open'])
-        self.assertIn('VALORANT was open',self.app.save_message());self.assertEqual(self.source.read_bytes(),FIXTURE)
+        path=self.save();self.assertTrue(path.is_file());self.assertTrue(self.app.last_saved['open'])  # saved with the game "open"
+        self.assertEqual(self.source.read_bytes(),FIXTURE)                                             # Save only read, never wrote
         self.app.run(lambda:self.app.apply_profile(path))
         self.assertIn('keeps its settings in memory',self.notices[-1][1]);self.assertEqual(self.target.read_bytes(),before)
         self.app.guard=lambda:None;self.save();self.assertFalse(self.app.last_saved['open'])

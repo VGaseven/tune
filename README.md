@@ -6,6 +6,11 @@ Small, local, portable Windows app. Not affiliated with Riot Games.
 > **Each person keeps their own data.** Tune is 100% local — no server, no accounts, no uploads.
 > Your profiles live only on your PC. You never see anyone else's settings and they never see yours.
 
+Two clear tabs: **Settings** (your signed-in account and its saved profile) and **Accounts**
+(switch accounts, browse and apply your saved profiles). The numbers on the Settings tab
+show your **saved** profile and change only when you press Save — the game writing its own
+file never changes them behind your back.
+
 ## What it does
 
 - **Save** your current account's video settings as a named profile (works while VALORANT is open — it only reads files).

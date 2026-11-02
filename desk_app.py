@@ -15,7 +15,7 @@ import desk_profiles as dp
 from desktop_mode import clamp_geometry,work_areas
 from desk_theme import VERSION,NAME,PALETTES,FONT,SEMIBOLD,GRADIENT,icon_font,reduced_motion,mix,title_bar
 from desk_icon import photo
-from desk_skin import Images,UI,RoundButton,PillButton,Toggle,Hotspot,Button,draw_matrix,matrix_width,draw_sphere,dot_field,fit,LIME,TEXT,SEMI
+from desk_skin import Images,UI,RoundButton,PillButton,Toggle,Hotspot,Button,rounded,draw_matrix,matrix_width,draw_sphere,dot_field,fit,LIME,TEXT,SEMI
 
 def _launch_riot(exe):
     """Starts Riot Client (user-initiated). Opens VALORANT's login so the user can switch account."""
@@ -94,37 +94,52 @@ class App:
         if self.content is None or not self.content.winfo_exists():return
         cv=self.content;c=self.look.c;px=self.look.px;cv.delete('all');self.ui.reset()
         W,H=self.size(cv,tuple(self.prefs['full'][:2]));self.drawn=(W,H)
-        dot_field(cv,W,H,px(14),c['dots'])
-        if self.screen=='save':self.draw_header(W,'people','Accounts',lambda:self.show_screen('accounts'),NAME);self.draw_save(W,H)
-        else:self.draw_header(W,'back','Back to Save',lambda:self.show_screen('save'),'Accounts');self.draw_accounts(W,H)
-    def draw_header(self,W,icon,name,command,title):
-        cv=self.content;c=self.look.c;px=self.look.px;d=px(48);y=px(20)+d/2
-        RoundButton(self.ui,name,px(20)+d/2,y,d,icon,command,c['chip'],c['text'],c['chiphover'])
+        cv.create_image(0,0,image=self.images.background(W,H,px(14),c['dots'],c['bg']),anchor='nw')
+        self.draw_chrome(W)
+        if self.screen=='save':self.draw_save(W,H)
+        else:self.draw_accounts(W,H)
+    def draw_chrome(self,W):
+        """App name, menu button, and the Settings | Accounts tab bar. Sets self.header_bottom."""
+        cv=self.content;c=self.look.c;px=self.look.px;d=px(44);y=px(18)+d/2
+        cv.create_text(px(22),y,text=NAME,font=(SEMI,16),fill=c['text'],anchor='w')
         self.more=RoundButton(self.ui,'Menu',W-px(20)-d/2,y,d,'menu',lambda:self.popup(self.menu_anchor()),c['chip'],c['text'],c['chiphover'])
-        cv.create_text(W/2,y,text=title,font=(SEMI,19),fill=c['text'])
-        self.header_bottom=y+d/2
+        self.header_bottom=self.draw_tabs(W,y+d/2+px(12))
+    def draw_tabs(self,W,y):
+        cv=self.content;c=self.look.c;px=self.look.px;tw=min(W-px(40),px(320));th=px(44);x0=(W-tw)/2;seg=tw/2
+        rounded(cv,x0,y,tw,th,th/2,fill=c['chip'],outline='')
+        for i,(key,lbl,icon) in enumerate([('save','Settings','info'),('accounts','Accounts','people')]):
+            sx=x0+i*seg;sel=self.screen==key
+            if sel:rounded(cv,sx+px(4),y+px(4),seg-px(8),th-px(8),(th-px(8))/2,fill='#FFFFFF' if self.look.name=='dark' else c['accent'],outline='')
+            fg=('#09090B' if self.look.name=='dark' else '#FFFFFF') if sel else c['muted']
+            cv.create_text(sx+seg/2,y+th/2,text=lbl,font=(SEMI,11),fill=fg)
+            Hotspot(self.ui,'Tab: '+lbl,sx,y,seg,th,th/2,lambda k=key:self.show_screen(k),c['focus'])
+        return y+th
     def menu_anchor(self):
         b=self.ui.find('Menu');cv=self.content
         if b is None:return None
         x0,y0,x1,y1=cv.bbox(b.bg);return (cv.winfo_rootx()+int(x0),cv.winfo_rooty()+int(y1)+self.look.px(6))
     def show_screen(self,key):
         if key not in ('save','accounts'):raise ValueError('Unknown screen.')
-        self.screen=key;self.prefs['tab']=key;self.persist();self.redraw()
+        changed=key!=self.screen;self.screen=key;self.prefs['tab']=key;self.persist();self.redraw()
         self.content.focus_set()
+        if changed and self.view=='full':self.fade(self.root)   # brief cross-fade on tab change
 
     def account_view(self):
-        """Display data for the Save screen: which account, your name for it, and its current
-        video values (read-only). Computed on refresh, not on every redraw."""
-        info={'path':None,'label':None,'signed':False,'values':{}}
+        """What the Settings tab shows: the account you are signed into, and the video values
+        from YOUR SAVED profile for it - NOT a live read of the game file. So the numbers only
+        change when you press Save; the game writing its own file never changes them here."""
+        info={'path':None,'label':None,'signed':False,'values':{},'saved':False}
+        def profile_for(ref):
+            return next((d for p,d in self.items if not dp.is_shared(d) and d['provenance']['source_ref']==ref),None)
         try:
             cur=self.current_account()
-            if cur:info.update(path=cur[0],label=cur[1],signed=True)
-            else:
-                rem=dp.remembered(self.store)
-                if rem:
-                    match=[p for p in dp.account_paths(model.discover(self.config_root,lambda:None),self.config_root) if model.source_id(p)==rem[0]]
-                    if match:info.update(path=match[0],label=rem[1])
-            if info['path']:info['values']=model.parse(model.read_bytes(info['path']))[2]
+            if cur:
+                info.update(path=cur[0],label=cur[1],signed=True)
+                prof=profile_for(model.source_id(cur[0]))
+                if prof:info.update(label=prof['label'],values=prof['settings'],saved=True)
+            if not info['saved']:                       # not signed in, or that account not saved yet
+                first=next(((p,d) for p,d in self.items if not dp.is_shared(d)),None)
+                if first and not info['signed']:info.update(path=first[0],label=first[1]['label'],values=first[1]['settings'],saved=True)
         except (OSError,ValueError,UnicodeError):pass
         return info
     def draw_save(self,W,H):
@@ -136,7 +151,8 @@ class App:
         fps=dp.shown('FrameRateLimit',v['FrameRateLimit']) if 'FrameRateLimit' in v else '--'
         ny=cy+R+px(50);dot=px(2.3) if len(fps)<4 else px(1.9)
         draw_matrix(cv,fps,W/2,ny,dot,'#FFFFFF')
-        cv.create_text(W/2,ny+px(40),text='FPS limit' if fps not in ('--','0') else ('FPS limit (unlimited)' if fps=='0' else 'No account read yet'),font=(TEXT,10),fill=c['muted'])
+        fps_label='FPS limit' if fps not in ('--','0') else ('FPS limit (unlimited)' if fps=='0' else ('press Save to capture this account' if a['signed'] else 'no saved profile yet'))
+        cv.create_text(W/2,ny+px(40),text=fps_label,font=(TEXT,10),fill=c['muted'])
         msg=self.save_message();mt=cv.create_text(W/2,sy-px(14),text=msg,font=(TEXT,9),fill=c['muted'],width=W-px(56),justify='center',anchor='s')
         msg_top=cv.bbox(mt)[1]
         for k,row in enumerate((5,3,2)):          # tapering dot trail under the label (reference)
@@ -150,9 +166,9 @@ class App:
         cv.create_text(sx+sw-px(34),ty,text=vs,font=(TEXT,12),fill='#FFFFFF',anchor='e');cv.create_text(sx+sw-px(34),ty+px(20),text='VSync',font=(TEXT,8),fill='#7C83C8',anchor='e')
         for i,(dx,dy) in enumerate([(0,0),(-1,1),(1,1),(-2,2),(0,2),(2,2)]):   # small dot pyramid icon
             xx=sx+sw/2+dx*px(4);yy=sy+px(26)+dy*px(4);cv.create_oval(xx-px(1.3),yy-px(1.3),xx+px(1.3),yy+px(1.3),fill=LIME if a['signed'] else '#C9CCF5',outline='')
-        name=a['label'] or ('New account' if a['path'] else 'Choose account')
+        name=a['label'] or ('New account' if a['signed'] else 'No account')
         cv.create_text(sx+sw/2,sy+px(52),text=fit(cv,name,(TEXT,12),sw-px(170)),font=(TEXT,12),fill='#FFFFFF')
-        cv.create_text(sx+sw/2,sy+px(72),text='signed in' if a['signed'] else ('your saved choice' if a['path'] else ''),font=(TEXT,8),fill='#7C83C8')
+        cv.create_text(sx+sw/2,sy+px(72),text='signed in' if a['signed'] else ('last saved' if a['saved'] else ''),font=(TEXT,8),fill=LIME if a['signed'] else '#7C83C8')
         # quality track: lime length = average quality level of the 10 groups (0-3)
         qs=[int(v[k]) for k in model.QUALITY if k in v];frac=(sum(qs)/len(qs)/3) if qs else 0
         ty=sy+px(128);x0=sx+px(70);x1=sx+sw-px(40)
@@ -166,18 +182,22 @@ class App:
         # bottom row: change account | Save settings (white end circle)
         bh=px(54);by=sy+sheet_h-px(26)-bh;rd=bh
         RoundButton(self.ui,'Switch account (open Riot Client)',sx+px(26)+rd/2,by+bh/2,rd,'refresh',lambda:self.run(self.launch_riot),'#1B2059','#FFFFFF','#262C70')
-        text='Save settings' if a['label'] else ('Name & save' if a['path'] else 'Set up & save')
+        text='Update save' if (a['signed'] and a['saved']) else ('Save this account' if a['signed'] else ('Save settings' if a['saved'] else 'Set up & save'))
         self.save_btn=PillButton(self.ui,'Save',sx+px(26)+rd+px(12),by,sw-px(52)-rd-px(12),bh,text,lambda:self.run(self.save_settings),'#1E2357','#FFFFFF','#283071','check')
         if self.busy:self.save_btn.set_state('disabled')
     def save_message(self):
-        s=self.last_saved;msg=self.status.get()
+        s=self.last_saved;msg=self.status.get();a=self.acct
+        # A fresh action message wins; otherwise a steady hint about what the screen shows.
+        if msg and not msg.startswith(('Saved','Updated')):return msg
         if s:
             what='all 12 video settings' if s['n']==12 else f'{s["n"]} video settings ('+', '.join(s['names'])+')'
             line=f'✓ Saved “{s["label"]}” at {s["time"].split(", ")[-1]}  ·  {what}'
             if s['ref']:line+='\nSensitivity kept for reference only'
-            if s.get('open'):line+='\nVALORANT was open - if a new change is missing, save again after closing it'
-            return line if not msg or msg.startswith(('Saved','Updated')) else msg
-        return msg or 'Save works while VALORANT is open. Apply needs it closed.'
+            return line
+        if a['signed'] and a['saved']:return 'Showing your saved profile. Numbers change only when you press Save.'
+        if a['signed']:return 'This account isn’t saved yet. Press Save - the game can stay open.'
+        if a['saved']:return 'Showing your last saved profile. Sign in (Switch account) to save another.'
+        return 'Save works while VALORANT is open. Applying to another account needs it closed.'
 
     def draw_accounts(self,W,H):
         cv=self.content;c=self.look.c;px=self.look.px;items=self.items
