@@ -11,6 +11,7 @@ from pathlib import Path
 import capture_model as model
 import desk_profiles as dp
 import desk_rank
+import desk_crosshair
 
 READING=lambda:None   # read-only operations never require the game to be closed
 RES_X=re.compile(rb'(?mi)^ResolutionSizeX=(\d{2,5})')
@@ -20,6 +21,7 @@ class Backend:
     def __init__(self,config_root=None,store_base=None,rank_cache=None,guard=None):
         self.config_root=Path(config_root) if config_root is not None else model.config_directory()
         self.store=model.Store(store_base)
+        self.crosshairs=desk_crosshair.Library(self.store.base)
         self.rank_cache=Path(rank_cache) if rank_cache is not None else self.store.base/'rank-cache'
         self.guard=guard or model.ensure_closed   # game-closed guard, used only for writes (Apply/Undo)
 
@@ -107,3 +109,10 @@ class Backend:
         except RuntimeError:
             raise RuntimeError('Close VALORANT and Riot Client first, then apply again. '
                                'While the game runs it rewrites its own settings on exit.') from None
+
+    # ---------- crosshair code library (local, credential-free) ----------
+    def crosshair_list(self):return self.crosshairs.list()
+    def crosshair_add(self,name,code,tags=None,notes=''):return self.crosshairs.add(name,code,tags,notes)
+    def crosshair_update(self,cid,name=None,code=None,tags=None,notes=None):return self.crosshairs.update(cid,name=name,code=code,tags=tags,notes=notes)
+    def crosshair_delete(self,cid):return self.crosshairs.delete(cid)
+    def crosshair_parse(self,code):return desk_crosshair.parse_code(code)

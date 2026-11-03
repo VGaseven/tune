@@ -33,6 +33,10 @@ class Api:
     def rank(self,puuid,region=None):return self._call(self.be.rank,puuid,region)
     def save(self,path,label):return self._call(self.be.save,path,label)
     def apply(self,profile_path,target_path):return self._call(self.be.apply,profile_path,target_path)
+    def crosshairs(self):return self._call(self.be.crosshair_list)
+    def crosshair_add(self,name,code,tags=None,notes=''):return self._call(self.be.crosshair_add,name,code,tags,notes)
+    def crosshair_delete(self,cid):return self._call(self.be.crosshair_delete,cid)
+    def crosshair_parse(self,code):return self._call(self.be.crosshair_parse,code)
 
     def launch_riot(self):
         def go():

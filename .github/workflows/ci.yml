@@ -18,10 +18,10 @@ jobs:
           python-version: '3.12'
 
       - name: Run test suite
-        run: python -m unittest test_capture test_rank test_backend test_web test_reference test_desk -v
+        run: python -m unittest test_capture test_rank test_backend test_web test_crosshair test_reference test_desk -v
 
       - name: Import check
-        run: python -c "import tune_web, tune_backend, desk_rank, capture_model, desk_app"
+        run: python -c "import tune_web, tune_backend, desk_crosshair, desk_rank, capture_model, desk_app"
 
       - name: Install build deps
         run: pip install -r requirements-build.txt
