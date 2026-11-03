@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 import tune_backend
 
-VERSION='6.0'
+VERSION='6.1'
 
 
 def resource(*parts):
