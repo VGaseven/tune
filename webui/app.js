@@ -28,6 +28,9 @@ async function call(name,...args){
   if(name==="save")return {ok:true,data:{replaced:false,label:args[1]}};
   if(name==="apply")return {ok:true,data:{applied:3}};
   if(name==="launch_riot")return {ok:true,data:{launched:true}};
+  if(name==="apply_to_all")return {ok:true,data:{targets:2,changed:2,results:[]}};
+  if(name==="share_code")return {ok:true,data:'{"format":"presetdesk-share","version":1,"settings":{"sg.TextureQuality":"3"},"label":"daisy#EU1"}'};
+  if(name==="share_import")return {ok:true,data:{label:"Shared preset",n:3}};
   if(name==="settings")return {ok:true,data:[{name:"View distance",value:"3"},{name:"Textures",value:"3"},{name:"Shadows",value:"2"},{name:"Anti-aliasing",value:"2"},{name:"VSync",value:"Off"},{name:"Frame-rate limit",value:"240"}]};
   if(name==="crosshairs")return {ok:true,data:MOCK.crosshairs};
   if(name==="crosshair_add"){const e={id:"x"+Date.now(),name:args[0],code:args[1],tags:args[2]||[]};MOCK.crosshairs.unshift(e);return {ok:true,data:e};}
@@ -79,11 +82,16 @@ function cardEl(a,i){
        <div class="hints">${chips||'<div class="chip">no settings read yet</div>'}</div>
        <div class="foot">
          <div class="saved">${a.last_saved?"Saved · "+ago(a.last_saved):"Not saved yet"}</div>
-         <button class="apply${a.signed_in?"":" ghost"}" ${canApply?"":"disabled"}>Apply
-           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+         <div class="acts">
+           ${canApply?`<button class="mini-btn toall" title="Copy to all accounts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 14l9 5 9-5"/></svg></button><button class="mini-btn share" title="Share preset"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8 11l8-4M8 13l8 4"/></svg></button>`:""}
+           <button class="apply${a.signed_in?"":" ghost"}" ${canApply?"":"disabled"}>Apply
+             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+         </div>
        </div>
      </div>`;
   el.querySelector(".apply").onclick=()=>openApply(a);
+  const toall=el.querySelector(".toall");if(toall)toall.onclick=()=>copyToAll(a);
+  const sh=el.querySelector(".share");if(sh)sh.onclick=()=>sharePreset(a);
   if(a.puuid) loadRank(a,el);
   return el;
 }
@@ -96,6 +104,37 @@ async function loadRank(a,el){
   if(d.name&&d.tag&&!a.saved) el.querySelector(".name").innerHTML=esc(d.name)+'<b>#'+esc(d.tag)+'</b>';
 }
 
+function confirmModal(title,sub,okText,onOk){
+  $("#m-title").textContent=title;$("#m-sub").textContent=sub;
+  const list=$("#m-list");list.innerHTML="";
+  const b=document.createElement("button");b.className="btn primary";b.textContent=okText;
+  b.onclick=()=>{closeModal();onOk();};list.appendChild(b);
+  $("#modal").classList.add("show");
+}
+function copyToAll(a){
+  const prof=profileFor(a.ref);if(!prof){toast("Save this account first.",true);return;}
+  const others=ACCOUNTS.filter(x=>x.ref!==a.ref).length;
+  if(!others){toast("You need another account to copy onto.",true);return;}
+  confirmModal("Copy to all accounts",`This copies ${prof.label}'s video settings onto every other account (${others}). The game must be closed; each account is backed up first.`,"Copy to all",async()=>{
+    toast("Copying to all…");const r=await call("apply_to_all",prof.path);
+    if(!r.ok){toast(r.error||"Couldn't copy.",true);return;}
+    toast(`Copied to ${r.data.changed} account${r.data.changed===1?"":"s"} of ${r.data.targets}.`);refresh();
+  });
+}
+async function sharePreset(a){
+  const prof=profileFor(a.ref);if(!prof){toast("Save this account first.",true);return;}
+  const r=await call("share_code",prof.path);
+  if(!r.ok){toast(r.error||"Couldn't make a share code.",true);return;}
+  copyText(r.data);toast("Preset code copied — send it to a friend. They open it with the Import button.");
+}
+function openImport(){$("#if-code").value="";$("#if-err").textContent="";$("#imodal").classList.add("show");$("#if-code").focus();}
+async function doImport(){
+  const text=$("#if-code").value.trim();
+  if(!text){$("#if-err").textContent="Paste a preset code first.";return;}
+  const r=await call("share_import",text);
+  if(!r.ok){$("#if-err").textContent=r.error||"That code is not valid.";return;}
+  $("#imodal").classList.remove("show");toast(`Imported "${r.data.label}" (${r.data.n} settings) — find it under Accounts.`);refresh();
+}
 function openApply(source){
   const prof=profileFor(source.ref); if(!prof){toast("Save this account first, then you can copy its settings.",true);return;}
   const targets=ACCOUNTS.filter(a=>a.ref!==source.ref);
@@ -231,6 +270,10 @@ function boot(){
   $("#xmodal").onclick=e=>{if(e.target.id==="xmodal")$("#xmodal").classList.remove("show");};
   $("#xf-code").addEventListener("input",xPreview);
   $("#xf-save").onclick=xSave;
+  $("#btn-import").onclick=openImport;
+  $("#if-cancel").onclick=()=>$("#imodal").classList.remove("show");
+  $("#imodal").onclick=e=>{if(e.target.id==="imodal")$("#imodal").classList.remove("show");};
+  $("#if-save").onclick=doImport;
   $("#btn-add").onclick=addAccount;
   $("#btn-switch").onclick=async()=>{const r=await call("launch_riot");
     toast(r.ok?"Opening Riot Client. Sign in there, then switch back — Tune will see the account.":(r.error||"Couldn't open Riot Client."),!r.ok);};

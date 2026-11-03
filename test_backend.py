@@ -58,6 +58,17 @@ class Settings(Base):
         names={r['name']:r['value'] for r in rows}
         self.assertEqual(names.get('Textures'),'3');self.assertEqual(names.get('VSync'),'Off')
 
+class Bulk(Base):
+    def test_apply_to_all_and_share_roundtrip(self):
+        saved=self.be.save(self.file(A),"MAIN")
+        out=self.be.apply_to_all(saved["path"])
+        self.assertEqual(out["targets"],1);self.assertEqual(out["changed"],1)   # only B differs
+        self.assertIn(b"sg.TextureQuality=3",Path(self.file(BB)).read_bytes())
+        code=self.be.share_code(saved["path"])
+        self.assertIn("presetdesk-share",code)
+        imp=self.be.share_import(code)
+        self.assertGreaterEqual(imp["n"],2);self.assertEqual(imp["label"],"MAIN")
+
 class Guard(Base):
     def test_apply_blocked_when_guard_reports_game_open(self):
         saved=self.be.save(self.file(A),'X')

@@ -38,6 +38,9 @@ class Api:
     def crosshair_delete(self,cid):return self._call(self.be.crosshair_delete,cid)
     def crosshair_parse(self,code):return self._call(self.be.crosshair_parse,code)
     def settings(self,path):return self._call(self.be.account_settings,path)
+    def apply_to_all(self,profile_path):return self._call(self.be.apply_to_all,profile_path)
+    def share_code(self,profile_path):return self._call(self.be.share_code,profile_path)
+    def share_import(self,text):return self._call(self.be.share_import,text)
 
     def launch_riot(self):
         def go():

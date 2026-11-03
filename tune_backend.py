@@ -6,6 +6,7 @@ on CI. Listing and saving use a no-op guard - they only READ, so they work while
 applying uses the real game-closed guard. Security model is unchanged: only the 12 video keys are
 ever transferred, and no credentials, tokens or login files are read."""
 from __future__ import annotations
+import json
 import re
 from pathlib import Path
 import capture_model as model
@@ -113,6 +114,40 @@ class Backend:
         backup=model.apply(target_path,profile['settings'],raw,self.store.base/'backups',self.config_root,self.guard)
         return {'applied':len(delta),'backup':str(backup) if backup else None,
                 'delta':[{'key':k,'from':a,'to':b} for k,a,b in delta]}
+
+    def apply_to_all(self,profile_path):
+        """Copy a saved profile's video settings onto every OTHER account (game must be closed).
+        Each target is auto-backed-up first, so the whole sweep stays undoable per account."""
+        profile=model.import_profile(dp.owned(self.store,profile_path));self._check_closed()
+        src=profile['provenance']['source_ref'];results=[]
+        for path in self._paths():
+            if model.source_id(path)==src:continue
+            acc=dp.account_of(path,self.config_root)
+            try:
+                raw,delta=model.preview(path,profile,self.config_root,self.guard)
+                if not delta:results.append({'account':acc,'applied':0});continue
+                backup=model.apply(path,profile['settings'],raw,self.store.base/'backups',self.config_root,self.guard)
+                results.append({'account':acc,'applied':len(delta),'backup':str(backup) if backup else None})
+            except Exception as e:
+                results.append({'account':acc,'error':str(e)})
+        return {'targets':len(results),'changed':sum(1 for r in results if r.get('applied')),'results':results}
+
+    def share_code(self,profile_path):
+        """A shareable preset string: the video values plus your label only - no account names,
+        file paths, IDs, sensitivity or timestamps."""
+        data=model.import_profile(dp.owned(self.store,profile_path))
+        return json.dumps(dp.share_payload(data,data['label']))
+
+    def share_import(self,text):
+        """Import a shared preset string into your library. Strictly validated, then stored."""
+        import os,tempfile
+        with tempfile.NamedTemporaryFile('w',suffix='.json',delete=False,encoding='utf-8') as f:
+            f.write(text or '');tmp=f.name
+        try:data=dp.read_import(tmp);saved=self.store.save(data)
+        finally:
+            try:os.unlink(tmp)
+            except OSError:pass
+        return {'path':str(saved),'label':data['label'],'n':len(data['settings'])}
 
     def _check_closed(self):
         try:self.guard()

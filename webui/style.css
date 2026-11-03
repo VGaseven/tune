@@ -190,3 +190,14 @@ body{background:var(--bg);color:var(--ink);font-family:Inter,'Segoe UI',system-u
   background:rgba(255,255,255,.04);border:1px solid var(--stroke);font-size:13.5px}
 .srow span{color:var(--mut)}.srow b{color:#fff;font-weight:700}
 .sfoot{margin-top:18px;display:flex;justify-content:flex-end}
+
+/* ---------- card actions + import ---------- */
+.acts{display:flex;align-items:center;gap:8px}
+.mini-btn{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;cursor:pointer;color:#cfcfe0;
+  background:rgba(255,255,255,.05);border:1px solid var(--stroke2);transition:.15s}
+.mini-btn:hover{background:rgba(255,255,255,.1);color:#fff;transform:translateY(-1px)}
+.mini-btn:active{transform:scale(.92)}
+.mini-btn svg{width:16px;height:16px}
+.itext{width:100%;min-height:120px;resize:vertical;padding:12px 14px;border-radius:14px;background:rgba(0,0,0,.3);
+  border:1px solid var(--stroke2);color:var(--ink);font-family:ui-monospace,Consolas,monospace;font-size:12px;outline:none;margin-bottom:6px}
+.itext:focus{border-color:rgba(215,242,75,.5)}

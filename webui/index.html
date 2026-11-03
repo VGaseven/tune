@@ -25,6 +25,8 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
     <button class="rbtn" id="btn-switch" title="Open Riot Client to switch account" aria-label="Switch account">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 13-6M20 12a8 8 0 0 1-13 6"/><path d="M17 3v4h-4M7 21v-4h4"/></svg></button>
+    <button class="rbtn" id="btn-import" title="Import a shared preset" aria-label="Import preset">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></button>
   </div>
 
   <div class="tabs">
@@ -46,6 +48,16 @@
     <div class="m-sub" id="m-sub">Pick the account to copy these settings onto.</div>
     <div class="m-list" id="m-list"></div>
     <div class="m-foot"><button class="btn ghost" id="m-cancel">Cancel</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="imodal">
+  <div class="modal">
+    <div class="m-title">Import a shared preset</div>
+    <div class="m-sub">Paste a preset code a friend sent you. Only video settings are imported — nothing personal.</div>
+    <textarea id="if-code" class="itext" placeholder='{"format":"presetdesk-share", ...}'></textarea>
+    <div class="xerr" id="if-err"></div>
+    <div class="m-foot"><button class="btn" id="if-cancel">Cancel</button><button class="btn primary" id="if-save">Import</button></div>
   </div>
 </div>
 
