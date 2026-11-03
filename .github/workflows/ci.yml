@@ -15,19 +15,19 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: '3.12'
 
       - name: Run test suite
         run: python -m unittest test_capture test_rank test_backend test_web test_reference test_desk -v
 
       - name: Import check
-        run: python -c "import desk_app, desk_skin, desk_profiles, desk_theme, capture_model"
+        run: python -c "import tune_web, tune_backend, desk_rank, capture_model, desk_app"
 
       - name: Install build deps
         run: pip install -r requirements-build.txt
 
       - name: Build Tune.exe
-        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name Tune desk_app.py
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name Tune --add-data "webui;webui" --collect-all webview tune_web.py
 
       - name: Self-test the built EXE (synthetic data only)
         shell: pwsh
@@ -55,11 +55,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: '3.13'
+          python-version: '3.12'
       - name: Install build deps
         run: pip install -r requirements-build.txt
       - name: Build Tune.exe
-        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name Tune desk_app.py
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name Tune --add-data "webui;webui" --collect-all webview tune_web.py
       - name: Checksum
         shell: pwsh
         run: (Get-FileHash dist/Tune.exe -Algorithm SHA256).Hash > dist/Tune.exe.sha256.txt
