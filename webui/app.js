@@ -11,7 +11,7 @@ const MOCK = {
     {ref:"c",path:"C",account:"p3-eu",puuid:"p3",region:"eu",signed_in:false,saved:"kaya#EU2",
      last_saved:new Date(Date.now()-3*864e5).toISOString(),hints:{resolution:"1920×1080",fps:"0",vsync:"On"}}
   ],
-  profiles:[{ref:"a",path:"profA",label:"daisy#EU1"},{ref:"c",path:"profC",label:"kaya#EU2"}],
+  profiles:[{ref:"a",id:"profA",path:"profA",label:"daisy#EU1"},{ref:"c",id:"profC",path:"profC",label:"kaya#EU2"}],
   rank:{p1:{name:"daisy",tag:"EU1",rank:"Immortal 2",rr:42,source:"online"},
         p3:{name:"kaya",tag:"EU2",rank:"Platinum 1",rr:12,source:"online"}},
   crosshairs:[{id:"x1",name:"My main",code:"0;P;c;5;h;0;0l;4;0o;2;0a;1;d;1;z;2",tags:["Pros","clean"]},
@@ -72,8 +72,8 @@ function cardEl(a,i){
   const canApply=!!profileFor(a.ref);
   el.innerHTML=
     `<div class="banner ${BANNERS[i%4]}">
-       <div class="rr"><div class="num">—</div><div class="lab">RR</div></div>
-       <div class="rank"><span class="dot"></span><span class="rank-t">Unranked</span></div>
+       <div class="rr hidden"><div class="num">—</div><div class="lab">RR</div></div>
+       <div class="rank hidden"><span class="dot"></span><span class="rank-t">Unranked</span></div>
        <div class="avatar">${esc(letter)}</div>
        ${a.signed_in?'<div class="me-dot"><i></i> signed in</div>':""}
      </div>
@@ -99,8 +99,9 @@ function cardEl(a,i){
 async function loadRank(a,el){
   const r=await call("rank",a.puuid,a.region); if(!r.ok||!r.data) return; const d=r.data;
   if(d.source==="offline") return;
-  if(d.rr!=null) el.querySelector(".rr .num").textContent=d.rr;
-  if(d.rank) el.querySelector(".rank-t").textContent=d.rank;
+  if(d.rr!=null){el.querySelector(".rr .num").textContent=d.rr;el.querySelector(".rr").classList.remove("hidden");}
+  if(d.rank){el.querySelector(".rank-t").textContent=d.rank;el.querySelector(".rank").classList.remove("hidden");}
+  if(d.card_url){const b=el.querySelector(".banner");b.style.backgroundImage=`linear-gradient(180deg,rgba(0,0,0,.12),rgba(0,0,0,.4)),url("${d.card_url}")`;b.style.backgroundSize="cover";b.style.backgroundPosition="center";}
   if(d.name&&d.tag&&!a.saved) el.querySelector(".name").innerHTML=esc(d.name)+'<b>#'+esc(d.tag)+'</b>';
 }
 
@@ -116,14 +117,14 @@ function copyToAll(a){
   const others=ACCOUNTS.filter(x=>x.ref!==a.ref).length;
   if(!others){toast("You need another account to copy onto.",true);return;}
   confirmModal("Copy to all accounts",`This copies ${prof.label}'s video settings onto every other account (${others}). The game must be closed; each account is backed up first.`,"Copy to all",async()=>{
-    toast("Copying to all…");const r=await call("apply_to_all",prof.path);
+    toast("Copying to all…");const r=await call("apply_to_all",prof.id);
     if(!r.ok){toast(r.error||"Couldn't copy.",true);return;}
     toast(`Copied to ${r.data.changed} account${r.data.changed===1?"":"s"} of ${r.data.targets}.`);refresh();
   });
 }
 async function sharePreset(a){
   const prof=profileFor(a.ref);if(!prof){toast("Save this account first.",true);return;}
-  const r=await call("share_code",prof.path);
+  const r=await call("share_code",prof.id);
   if(!r.ok){toast(r.error||"Couldn't make a share code.",true);return;}
   copyText(r.data);toast("Preset code copied — send it to a friend. They open it with the Import button.");
 }
@@ -152,7 +153,7 @@ const closeModal=()=>$("#modal").classList.remove("show");
 
 async function doApply(prof,target){
   closeModal(); toast("Applying…");
-  const r=await call("apply",prof.path,target.path);
+  const r=await call("apply",prof.id,target.ref);
   if(!r.ok){toast(r.error||"Apply failed.",true);return;}
   const n=r.data&&r.data.applied;
   toast(n?`Applied ${n} video setting${n>1?"s":""} to ${target.saved||target.account}. Undo stays available.`:"Already matched — nothing changed.");
@@ -166,7 +167,7 @@ async function addAccount(){
   if(!label){ const r=await call("rank",me.puuid,me.region); const d=r.ok&&r.data;
     label=(d&&d.name&&d.tag)?`${d.name}#${d.tag}`:("Account "+me.puuid.slice(0,4)); }
   toast("Saving…");
-  const r=await call("save",me.path,label);
+  const r=await call("save",me.ref,label);
   if(!r.ok){toast(r.error||"Save failed.",true);return;}
   toast(`${r.data&&r.data.replaced?"Updated":"Saved"} ${esc(label)}.`);
   await refresh();
@@ -247,7 +248,7 @@ async function loadSettings(){
   if(!ACCOUNTS.length){const r=await call("accounts");if(r.ok)ACCOUNTS=r.data;}
   const me=ACCOUNTS.find(a=>a.signed_in);
   if(!me){g.innerHTML='<div class="empty">Sign in to a VALORANT account to see its video settings.</div>';return;}
-  const r=await call("settings",me.path);const rows=r.ok?r.data:[];
+  const r=await call("settings",me.ref);const rows=r.ok?r.data:[];
   const card=document.createElement("div");card.className="scard";
   card.innerHTML=`<div class="shead"><div class="savatar">${esc((me.saved||me.account||"?").trim()[0].toUpperCase())}</div>
       <div><div class="sname">${esc(me.saved||("Account "+me.puuid.slice(0,4)))}</div><div class="ssub">current video settings · signed in</div></div></div>
@@ -282,4 +283,4 @@ function boot(){
   refresh();
 }
 if(hasApi())boot(); else window.addEventListener("pywebviewready",boot,{once:true});
-setTimeout(boot,300); // browser-preview fallback when pywebviewready never fires
+setTimeout(()=>{if(!window.pywebview)boot();},300); // browser-only fallback; never short-circuits the real app

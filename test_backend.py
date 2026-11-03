@@ -4,6 +4,7 @@ parse, apply copies only the video keys and is undoable, and apply is blocked wh
 import tempfile
 import unittest
 from pathlib import Path
+import capture_model as model
 import tune_backend as B
 
 A='0aec6e15-90a1-4b2c-8d3e-111111111111'
@@ -23,6 +24,7 @@ class Base(unittest.TestCase):
         (self.base/'Logs'/'ShooterGame.log').write_text(f'LogShooterGameUserSettings: Logged in user changed: {A}\n',encoding='utf-8')
         self.be=B.Backend(self.config,store_base=self.base/'app',guard=lambda:None)
     def file(self,uid):return str(self.config/f'{uid}-eu'/'Windows'/'GameUserSettings.ini')
+    def ref(self,uid):return model.source_id(Path(self.file(uid)))
 
 class Accounts(Base):
     def test_lists_both_with_signed_in_region_and_hints(self):
@@ -36,45 +38,46 @@ class Accounts(Base):
 
 class SaveApply(Base):
     def test_save_surfaces_label_on_account(self):
-        res=self.be.save(self.file(A),'DAISY')
+        res=self.be.save(self.ref(A),'DAISY')
         self.assertFalse(res['replaced']);self.assertGreaterEqual(res['n'],3)
         by={a['account']:a for a in self.be.accounts()}
         self.assertEqual(by[f'{A}-eu']['saved'],'DAISY');self.assertIsNotNone(by[f'{A}-eu']['last_saved'])
         self.assertEqual(len(self.be.profiles()),1)
     def test_apply_copies_only_video_setting_and_is_undoable(self):
-        saved=self.be.save(self.file(A),'DAISY')
-        out=self.be.apply(saved['path'],self.file(BB))
+        saved=self.be.save(self.ref(A),'DAISY')
+        out=self.be.apply(Path(saved['path']).name,self.ref(BB))
         self.assertEqual(out['applied'],1);self.assertIsNotNone(out['backup'])
         self.assertIn(b'sg.TextureQuality=3',Path(self.file(BB)).read_bytes())   # 0 -> 3
         self.assertIn(b'ResolutionSizeX=1920',Path(self.file(BB)).read_bytes())  # untouched key kept
     def test_apply_is_noop_when_already_equal(self):
-        saved=self.be.save(self.file(A),'DAISY')
-        self.be.apply(saved['path'],self.file(BB))
-        self.assertEqual(self.be.apply(saved['path'],self.file(BB))['applied'],0)
+        saved=self.be.save(self.ref(A),'DAISY')
+        pid=Path(saved['path']).name
+        self.be.apply(pid,self.ref(BB))
+        self.assertEqual(self.be.apply(pid,self.ref(BB))['applied'],0)
 
 class Settings(Base):
     def test_account_settings_lists_named_values(self):
-        rows=self.be.account_settings(self.file(A))
+        rows=self.be.account_settings(self.ref(A))
         names={r['name']:r['value'] for r in rows}
         self.assertEqual(names.get('Textures'),'3');self.assertEqual(names.get('VSync'),'Off')
 
 class Bulk(Base):
     def test_apply_to_all_and_share_roundtrip(self):
-        saved=self.be.save(self.file(A),"MAIN")
-        out=self.be.apply_to_all(saved["path"])
+        saved=self.be.save(self.ref(A),"MAIN");pid=Path(saved["path"]).name
+        out=self.be.apply_to_all(pid)
         self.assertEqual(out["targets"],1);self.assertEqual(out["changed"],1)   # only B differs
         self.assertIn(b"sg.TextureQuality=3",Path(self.file(BB)).read_bytes())
-        code=self.be.share_code(saved["path"])
+        code=self.be.share_code(pid)
         self.assertIn("presetdesk-share",code)
         imp=self.be.share_import(code)
         self.assertGreaterEqual(imp["n"],2);self.assertEqual(imp["label"],"MAIN")
 
 class Guard(Base):
     def test_apply_blocked_when_guard_reports_game_open(self):
-        saved=self.be.save(self.file(A),'X')
+        saved=self.be.save(self.ref(A),'X')
         def boom():raise RuntimeError('game open')
         self.be.guard=boom
-        with self.assertRaises(RuntimeError):self.be.apply(saved['path'],self.file(BB))
+        with self.assertRaises(RuntimeError):self.be.apply(Path(saved['path']).name,self.ref(BB))
 
 if __name__=='__main__':
     unittest.main()

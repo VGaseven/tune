@@ -41,6 +41,18 @@ class Backend:
             index.setdefault(data['provenance']['source_ref'],(data['label'],data['provenance']['captured_utc']))
         return index
 
+    def _path_for_ref(self,ref):
+        """Resolve a short account ref (source_id) to its real file path on THIS machine. The UI
+        only ever sends refs/ids across the bridge, never raw Windows paths (which mangle in transit)."""
+        for p in self._paths():
+            if model.source_id(p)==ref:return p
+        raise ValueError('That account is no longer available on this PC.')
+
+    def _profile_for_id(self,pid):
+        for p,_ in dp.entries(self.store):
+            if p.name==pid:return p
+        raise ValueError('That saved profile is no longer in the library.')
+
     def accounts(self):
         """One entry per VALORANT account folder on this PC, with the signed-in flag, saved label,
         region/puuid (for the optional rank lookup) and a few readable setting hints for the card."""
@@ -78,10 +90,10 @@ class Backend:
                  'n':len(data['settings']),'shared':dp.is_shared(data)}
                 for path,data in dp.entries(self.store)]
 
-    def account_settings(self,path):
-        """The full video settings (the 12 keys) on a game file, display-ready and read-only.
-        VSync is shown as On/Off; everything else keeps its exact value."""
-        values=model.parse(model.read_bytes(path))[2];out=[]
+    def account_settings(self,ref):
+        """The full video settings (the 12 keys) on an account's game file, display-ready and
+        read-only. VSync is shown as On/Off; everything else keeps its exact value."""
+        values=model.parse(model.read_bytes(self._path_for_ref(ref)))[2];out=[]
         for k in dp.ORDER:
             if k not in values:continue
             v='On' if (k=='bUseVSync' and values[k]=='True') else 'Off' if k=='bUseVSync' else dp.shown(k,values[k])
@@ -96,29 +108,31 @@ class Backend:
         exe=dp.riot_client();return str(exe) if exe else None
 
     # ---------- writes ----------
-    def save(self,path,label):
-        """Capture the 12 video settings from a game file into a saved profile (works game-open)."""
-        data=model.capture(path,label,self.config_root,READING)
+    def save(self,ref,label):
+        """Capture the 12 video settings from an account's game file into a saved profile
+        (works while the game is open - it only reads)."""
+        path=self._path_for_ref(ref);data=model.capture(path,label,self.config_root,READING)
         saved,replaced=dp.save_capture(self.store,data)
-        try:self.store.label(Path(path),label);self.store.remember(Path(path))
+        try:self.store.label(path,label);self.store.remember(path)
         except (OSError,ValueError):pass
         return {'path':str(saved),'label':label,'replaced':replaced,
                 'captured':data['provenance']['captured_utc'],'n':len(data['settings'])}
 
-    def apply(self,profile_path,target_path):
+    def apply(self,profile_id,target_ref):
         """Write a saved profile's video settings onto another account (requires the game closed).
         Always snapshots the target first, so every apply is undoable. Returns the applied delta."""
-        profile=model.import_profile(dp.owned(self.store,profile_path));self._check_closed()
+        profile=model.import_profile(self._profile_for_id(profile_id));target_path=self._path_for_ref(target_ref)
+        self._check_closed()
         raw,delta=model.preview(target_path,profile,self.config_root,self.guard)
         if not delta:return {'applied':0,'delta':[],'backup':None}
         backup=model.apply(target_path,profile['settings'],raw,self.store.base/'backups',self.config_root,self.guard)
         return {'applied':len(delta),'backup':str(backup) if backup else None,
                 'delta':[{'key':k,'from':a,'to':b} for k,a,b in delta]}
 
-    def apply_to_all(self,profile_path):
+    def apply_to_all(self,profile_id):
         """Copy a saved profile's video settings onto every OTHER account (game must be closed).
         Each target is auto-backed-up first, so the whole sweep stays undoable per account."""
-        profile=model.import_profile(dp.owned(self.store,profile_path));self._check_closed()
+        profile=model.import_profile(self._profile_for_id(profile_id));self._check_closed()
         src=profile['provenance']['source_ref'];results=[]
         for path in self._paths():
             if model.source_id(path)==src:continue
@@ -132,10 +146,10 @@ class Backend:
                 results.append({'account':acc,'error':str(e)})
         return {'targets':len(results),'changed':sum(1 for r in results if r.get('applied')),'results':results}
 
-    def share_code(self,profile_path):
+    def share_code(self,profile_id):
         """A shareable preset string: the video values plus your label only - no account names,
         file paths, IDs, sensitivity or timestamps."""
-        data=model.import_profile(dp.owned(self.store,profile_path))
+        data=model.import_profile(self._profile_for_id(profile_id))
         return json.dumps(dp.share_payload(data,data['label']))
 
     def share_import(self,text):

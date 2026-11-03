@@ -150,6 +150,7 @@ body{background:var(--bg);color:var(--ink);font-family:Inter,'Segoe UI',system-u
 .tab:hover{color:#fff;border-color:var(--stroke2)}
 .tab.active{color:#0d1400;background:var(--lime);border-color:transparent;box-shadow:0 6px 16px rgba(215,242,75,.25)}
 .view.hidden{display:none}
+.rr.hidden,.rank.hidden{display:none}
 
 .xcard{cursor:default}
 .xtop{display:flex;gap:14px;padding:16px 16px 10px}
