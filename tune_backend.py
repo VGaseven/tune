@@ -77,6 +77,16 @@ class Backend:
                  'n':len(data['settings']),'shared':dp.is_shared(data)}
                 for path,data in dp.entries(self.store)]
 
+    def account_settings(self,path):
+        """The full video settings (the 12 keys) on a game file, display-ready and read-only.
+        VSync is shown as On/Off; everything else keeps its exact value."""
+        values=model.parse(model.read_bytes(path))[2];out=[]
+        for k in dp.ORDER:
+            if k not in values:continue
+            v='On' if (k=='bUseVSync' and values[k]=='True') else 'Off' if k=='bUseVSync' else dp.shown(k,values[k])
+            out.append({'key':k,'name':dp.NAMES[k],'value':v})
+        return out
+
     def rank(self,puuid,region=None):
         """Optional public rank/card lookup. Network-bound - the caller runs it off the UI thread."""
         return desk_rank.lookup(puuid,region,app_dir=self.store.base,cache_dir=self.rank_cache)

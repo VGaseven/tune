@@ -52,6 +52,12 @@ class SaveApply(Base):
         self.be.apply(saved['path'],self.file(BB))
         self.assertEqual(self.be.apply(saved['path'],self.file(BB))['applied'],0)
 
+class Settings(Base):
+    def test_account_settings_lists_named_values(self):
+        rows=self.be.account_settings(self.file(A))
+        names={r['name']:r['value'] for r in rows}
+        self.assertEqual(names.get('Textures'),'3');self.assertEqual(names.get('VSync'),'Off')
+
 class Guard(Base):
     def test_apply_blocked_when_guard_reports_game_open(self):
         saved=self.be.save(self.file(A),'X')

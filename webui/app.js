@@ -28,6 +28,7 @@ async function call(name,...args){
   if(name==="save")return {ok:true,data:{replaced:false,label:args[1]}};
   if(name==="apply")return {ok:true,data:{applied:3}};
   if(name==="launch_riot")return {ok:true,data:{launched:true}};
+  if(name==="settings")return {ok:true,data:[{name:"View distance",value:"3"},{name:"Textures",value:"3"},{name:"Shadows",value:"2"},{name:"Anti-aliasing",value:"2"},{name:"VSync",value:"Off"},{name:"Frame-rate limit",value:"240"}]};
   if(name==="crosshairs")return {ok:true,data:MOCK.crosshairs};
   if(name==="crosshair_add"){const e={id:"x"+Date.now(),name:args[0],code:args[1],tags:args[2]||[]};MOCK.crosshairs.unshift(e);return {ok:true,data:e};}
   if(name==="crosshair_delete"){MOCK.crosshairs=MOCK.crosshairs.filter(c=>c.id!==args[0]);return {ok:true,data:true};}
@@ -202,11 +203,25 @@ async function xSave(){
   if(!r.ok){$("#xf-err").textContent=r.error||"Could not save that code.";return;}
   $("#xmodal").classList.remove("show");toast("Crosshair saved.");loadCrosshairs();
 }
+async function loadSettings(){
+  const g=$("#sgrid");g.innerHTML="";
+  if(!ACCOUNTS.length){const r=await call("accounts");if(r.ok)ACCOUNTS=r.data;}
+  const me=ACCOUNTS.find(a=>a.signed_in);
+  if(!me){g.innerHTML='<div class="empty">Sign in to a VALORANT account to see its video settings.</div>';return;}
+  const r=await call("settings",me.path);const rows=r.ok?r.data:[];
+  const card=document.createElement("div");card.className="scard";
+  card.innerHTML=`<div class="shead"><div class="savatar">${esc((me.saved||me.account||"?").trim()[0].toUpperCase())}</div>
+      <div><div class="sname">${esc(me.saved||("Account "+me.puuid.slice(0,4)))}</div><div class="ssub">current video settings · signed in</div></div></div>
+    <div class="srows">${rows.map(x=>`<div class="srow"><span>${esc(x.name)}</span><b>${esc(x.value)}</b></div>`).join("")||'<div class="empty">No readable video settings in this file.</div>'}</div>
+    <div class="sfoot"><button class="apply" id="s-save">Save these settings</button></div>`;
+  g.appendChild(card);
+  const b=card.querySelector("#s-save");if(b)b.onclick=addAccount;
+}
 function setView(v){
   document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
-  $("#view-accounts").classList.toggle("hidden",v!=="accounts");
-  $("#view-crosshairs").classList.toggle("hidden",v!=="crosshairs");
+  ["accounts","settings","crosshairs"].forEach(k=>$("#view-"+k).classList.toggle("hidden",k!==v));
   if(v==="crosshairs")loadCrosshairs();
+  if(v==="settings")loadSettings();
 }
 
 function boot(){

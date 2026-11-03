@@ -37,6 +37,7 @@ class Api:
     def crosshair_add(self,name,code,tags=None,notes=''):return self._call(self.be.crosshair_add,name,code,tags,notes)
     def crosshair_delete(self,cid):return self._call(self.be.crosshair_delete,cid)
     def crosshair_parse(self,code):return self._call(self.be.crosshair_parse,code)
+    def settings(self,path):return self._call(self.be.account_settings,path)
 
     def launch_riot(self):
         def go():
