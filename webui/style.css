@@ -110,3 +110,35 @@ body{background:var(--bg);color:var(--ink);font-family:Inter,'Segoe UI',system-u
 .m-foot{display:flex;justify-content:flex-end;margin-top:16px}
 .btn{font-size:13px;font-weight:600;padding:9px 16px;border-radius:999px;cursor:pointer;background:rgba(255,255,255,.06);color:#d4d4e2;border:1px solid var(--stroke2)}
 .btn:hover{background:rgba(255,255,255,.1)}
+
+/* ---------- motion polish: springy micro-interactions ---------- */
+.card{transition:transform .26s cubic-bezier(.34,1.56,.64,1),box-shadow .2s,border-color .2s}
+.card:active{transform:translateY(-2px) scale(.994)}
+.rbtn{transition:transform .2s cubic-bezier(.34,1.56,.64,1),background-color .18s,border-color .18s,color .18s,box-shadow .18s}
+.rbtn:hover{transform:translateY(-1px) scale(1.07)}
+.rbtn:active{transform:scale(.92)}
+.apply{transition:transform .18s cubic-bezier(.34,1.56,.64,1),filter .16s,box-shadow .16s,background .16s}
+.apply:hover{transform:translateY(-1px) scale(1.04)}
+.apply:active:not(:disabled){transform:scale(.95)}
+.add{transition:transform .26s cubic-bezier(.34,1.56,.64,1),border-color .18s,background .18s}
+.add:hover{transform:translateY(-3px)}
+.add:active{transform:scale(.99)}
+.m-row{transition:transform .15s ease,background .15s,border-color .15s}
+.m-row:active{transform:scale(.98)}
+.btn{transition:transform .15s cubic-bezier(.34,1.56,.64,1),background .15s}
+.btn:active{transform:scale(.95)}
+
+/* card entrance (backwards fill so it never locks the hover transform) */
+@keyframes pop{from{opacity:0;transform:translateY(14px) scale(.97)}to{opacity:1;transform:none}}
+.card,.add{animation:pop .4s cubic-bezier(.34,1.56,.64,1) backwards}
+
+/* apply modal: animated spring pop-in instead of an instant show */
+.modal-bg{display:flex!important;opacity:0;visibility:hidden;pointer-events:none;transition:opacity .2s ease,visibility .2s}
+.modal-bg.show{opacity:1;visibility:visible;pointer-events:auto}
+.modal{transform:translateY(14px) scale(.96);opacity:0;transition:transform .3s cubic-bezier(.34,1.56,.64,1),opacity .2s ease}
+.modal-bg.show .modal{transform:none;opacity:1}
+
+/* toast springy entrance */
+.toast{transition:opacity .25s ease,transform .3s cubic-bezier(.34,1.56,.64,1)}
+
+@media (prefers-reduced-motion: reduce){*{animation:none!important;transition-duration:.01ms!important}}

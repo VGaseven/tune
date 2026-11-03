@@ -55,7 +55,7 @@ function render(){
 }
 
 function cardEl(a,i){
-  const el=document.createElement("div"); el.className="card"+(a.signed_in?" me":"");
+  const el=document.createElement("div"); el.className="card"+(a.signed_in?" me":""); el.style.animationDelay=(i*0.05)+"s";
   const h=a.hints||{}, letter=(a.saved||a.account||"?").trim()[0].toUpperCase();
   const chips=[h.resolution&&`<div class="chip"><b>${esc(h.resolution)}</b></div>`,
                h.fps!=null&&`<div class="chip"><b>${esc(h.fps)}</b> fps</div>`,
