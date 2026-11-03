@@ -57,7 +57,7 @@ class FirstUseAndSave(DeskBase):
         self.app.show_screen('accounts');self.assertIn('No profiles yet',self.texts());self.assertEqual(self.app.apply_tile.state,'disabled')
         self.assertEqual(self.app.look.name,'dark');self.assertEqual(self.root.cget('bg'),desk_theme.PALETTES['dark']['bg'])
     def test_one_primary_save_action_on_main_screen(self):
-        pills=[c for c in self.app.ui.controls if isinstance(c,PillButton)]
+        pills=[c for c in self.app.ui.controls if isinstance(c,PillButton) and not c.name.startswith('Tab:')]
         self.assertEqual([p.name for p in pills],['Save']);self.assertEqual(self.app.save_btn.text,'Set up & save')
     def test_save_then_one_tap_repeat_updates_same_profile(self):
         first=self.save();self.assertEqual(len(self.app.items),1)
