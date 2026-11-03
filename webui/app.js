@@ -19,9 +19,11 @@ const MOCK = {
 };
 const BANNERS=["b0","b1","b2","b3"];
 const hasApi=()=>!!(window.pywebview&&window.pywebview.api);
+const PREVIEW=/[?&]preview=1/.test(location.search); // demo data is ONLY used in the browser preview
 
 async function call(name,...args){
   if(hasApi()) return await window.pywebview.api[name](...args);
+  if(!PREVIEW) return {ok:false,error:"Tune engine not connected yet."};   // real app never uses demo data
   if(name==="rank"){const d=MOCK.rank[args[0]]||{source:"offline"};return {ok:true,data:d};}
   if(name==="accounts")return {ok:true,data:MOCK.accounts};
   if(name==="profiles")return {ok:true,data:MOCK.profiles};
@@ -303,15 +305,18 @@ function boot(){
   addEventListener("pointermove",e=>{const s=$(".spot");s.style.setProperty("--x",e.clientX+"px");s.style.setProperty("--y",e.clientY+"px");});
   refresh();
 }
-// Boot the REAL backend as soon as pywebview binds its api. Never fall back to demo data while a
-// pywebview bridge exists - the handshake can take a few seconds on a real PC, so we wait for it.
-function tryBoot(){ if(window.__booted) return true; if(hasApi()){ boot(); return true; } return false; }
-window.addEventListener("pywebviewready",tryBoot,{once:true});
-if(!tryBoot()){
+// Boot the REAL backend as soon as pywebview binds its api. In the real app we NEVER show demo
+// data: we wait for the bridge (it can take a few seconds on a real PC), showing a connecting
+// message, and if it truly never arrives we say so instead of inventing accounts.
+function connecting(msg){ const g=$("#grid"); if(g) g.innerHTML='<div class="empty">'+esc(msg)+'</div>'; }
+function startup(){
+  if(hasApi()||PREVIEW){ boot(); return; }
+  connecting("Connecting to Tune…");
+  window.addEventListener("pywebviewready",()=>{ if(!window.__booted) boot(); },{once:true});
   let n=0;
   const t=setInterval(()=>{
-    if(tryBoot()||++n>60){ clearInterval(t);
-      if(!window.__booted && !window.pywebview) boot(); // only here: a plain browser with no bridge (preview)
-    }
-  },120);
+    if(hasApi()){ clearInterval(t); boot(); return; }
+    if(++n>80){ clearInterval(t); if(!window.__booted) connecting("Couldn't reach Tune's engine. Close Tune completely (check the system tray) and reopen it."); }
+  },100);
 }
+startup();
