@@ -19,6 +19,8 @@ from pathlib import Path
 ACCOUNT_URL='https://api.henrikdev.xyz/valorant/v2/by-puuid/account/{puuid}'
 MMR_URL='https://api.henrikdev.xyz/valorant/v3/by-puuid/mmr/{region}/{platform}/{puuid}'
 CARD_ART='https://media.valorant-api.com/playercards/{card}/largeart.png'
+TIER_ICON='https://media.valorant-api.com/competitivetiers/03621f52-342b-cf4e-4f86-9350a49c6d04/{tier}/smallicon.png'
+USER_AGENT='Tune/6.8 (+https://github.com/VGaseven/tune)'
 REGIONS=('eu','na','ap','kr','latam','br')
 PLATFORM='pc'
 DEFAULT_KEY=''   # deliberately empty in the public repo; a real key is supplied at runtime (resolve_key).
@@ -54,7 +56,7 @@ def _offline():
             'rank_icon':None,'source':'offline'}
 
 def _http_json(url,headers,timeout=6,max_bytes=1_000_000):
-    req=urllib.request.Request(url,headers=headers or {})
+    req=urllib.request.Request(url,headers={'User-Agent':USER_AGENT,'Accept':'application/json',**(headers or {})})
     try:
         with urllib.request.urlopen(req,timeout=timeout) as r:raw=r.read(max_bytes+1)
     except (urllib.error.URLError,OSError,ValueError) as e:raise RankError('network') from e
@@ -67,12 +69,20 @@ def _norm(account,mmr):
     a=(account or {}).get('data') or {}
     card=a.get('card') or {}
     card_id=card.get('id') if isinstance(card,dict) else card
-    cur=((mmr or {}).get('data') or {}).get('current_data') or {}
-    images=cur.get('images') or {}
+    m=(mmr or {}).get('data') or {}
+    if isinstance(m.get('current'),dict):   # v3 shape: current.tier.{id,name}, current.rr
+        cur=m['current'];tier=cur.get('tier') or {}
+        rank,rr,tid,icon=tier.get('name'),cur.get('rr'),tier.get('id'),None
+        peak=((m.get('peak') or {}).get('tier') or {}).get('name')
+    else:                                   # legacy v2 shape: current_data.*
+        cur=m.get('current_data') or {};images=cur.get('images') or {}
+        rank,rr,tid=cur.get('currenttierpatched'),cur.get('ranking_in_tier'),cur.get('currenttier')
+        icon=images.get('small') or images.get('large');peak=None
+    if not icon and isinstance(tid,int) and tid>2:icon=TIER_ICON.format(tier=tid)
     return {'name':a.get('name'),'tag':a.get('tag'),
-            'rank':cur.get('currenttierpatched'),'rr':cur.get('ranking_in_tier'),
+            'rank':rank,'rr':rr,'peak':peak,
             'card_id':card_id,'card_url':card_image_url(card_id),
-            'rank_icon':images.get('small') or images.get('large'),'source':'online'}
+            'rank_icon':icon,'source':'online'}
 
 def _cache_file(cache_dir,puuid):return Path(cache_dir)/f'{puuid}.json'
 
