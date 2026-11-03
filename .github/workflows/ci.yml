@@ -18,7 +18,7 @@ jobs:
           python-version: '3.13'
 
       - name: Run test suite
-        run: python -m unittest test_capture test_rank test_reference test_desk -v
+        run: python -m unittest test_capture test_rank test_backend test_reference test_desk -v
 
       - name: Import check
         run: python -c "import desk_app, desk_skin, desk_profiles, desk_theme, capture_model"
