@@ -27,7 +27,13 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 13-6M20 12a8 8 0 0 1-13 6"/><path d="M17 3v4h-4M7 21v-4h4"/></svg></button>
   </div>
 
-  <div class="grid" id="grid"></div>
+  <div class="tabs">
+    <button class="tab active" data-view="accounts">Accounts</button>
+    <button class="tab" data-view="crosshairs">Crosshairs</button>
+  </div>
+
+  <div id="view-accounts" class="view"><div class="grid" id="grid"></div></div>
+  <div id="view-crosshairs" class="view hidden"><div class="grid" id="xgrid"></div></div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -38,6 +44,23 @@
     <div class="m-sub" id="m-sub">Pick the account to copy these settings onto.</div>
     <div class="m-list" id="m-list"></div>
     <div class="m-foot"><button class="btn ghost" id="m-cancel">Cancel</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="xmodal">
+  <div class="modal">
+    <div class="m-title">Add crosshair</div>
+    <div class="m-sub">Paste a VALORANT crosshair code (Settings › Crosshair › Import profile code).</div>
+    <div class="xform">
+      <canvas id="xprev" width="120" height="120" class="xpreview"></canvas>
+      <div class="xfields">
+        <input id="xf-name" placeholder="Name (e.g. My main)" maxlength="80">
+        <input id="xf-code" placeholder="0;P;c;5;h;0;0l;4;0o;2;0a;1;d;1">
+        <input id="xf-tags" placeholder="Tags, comma separated (optional)">
+        <div class="xerr" id="xf-err"></div>
+      </div>
+    </div>
+    <div class="m-foot"><button class="btn" id="xf-cancel">Cancel</button><button class="btn primary" id="xf-save">Save crosshair</button></div>
   </div>
 </div>
 

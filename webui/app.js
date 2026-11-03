@@ -13,7 +13,9 @@ const MOCK = {
   ],
   profiles:[{ref:"a",path:"profA",label:"daisy#EU1"},{ref:"c",path:"profC",label:"kaya#EU2"}],
   rank:{p1:{name:"daisy",tag:"EU1",rank:"Immortal 2",rr:42,source:"online"},
-        p3:{name:"kaya",tag:"EU2",rank:"Platinum 1",rr:12,source:"online"}}
+        p3:{name:"kaya",tag:"EU2",rank:"Platinum 1",rr:12,source:"online"}},
+  crosshairs:[{id:"x1",name:"My main",code:"0;P;c;5;h;0;0l;4;0o;2;0a;1;d;1;z;2",tags:["Pros","clean"]},
+              {id:"x2",name:"Fun dot",code:"0;P;c;6;d;1;z;3;a;1;0b;0",tags:["Fun"]}]
 };
 const BANNERS=["b0","b1","b2","b3"];
 const hasApi=()=>!!(window.pywebview&&window.pywebview.api);
@@ -26,6 +28,9 @@ async function call(name,...args){
   if(name==="save")return {ok:true,data:{replaced:false,label:args[1]}};
   if(name==="apply")return {ok:true,data:{applied:3}};
   if(name==="launch_riot")return {ok:true,data:{launched:true}};
+  if(name==="crosshairs")return {ok:true,data:MOCK.crosshairs};
+  if(name==="crosshair_add"){const e={id:"x"+Date.now(),name:args[0],code:args[1],tags:args[2]||[]};MOCK.crosshairs.unshift(e);return {ok:true,data:e};}
+  if(name==="crosshair_delete"){MOCK.crosshairs=MOCK.crosshairs.filter(c=>c.id!==args[0]);return {ok:true,data:true};}
   return {ok:false,error:"unavailable"};
 }
 
@@ -132,8 +137,85 @@ async function refresh(){
   if(a.ok)ACCOUNTS=a.data; if(p.ok)PROFILES=p.data; render();
 }
 
+/* ---------------- crosshair library ---------------- */
+const XCOLORS={"0":"#FFFFFF","1":"#00FF00","2":"#ADFF2F","3":"#CCFF00","4":"#FFFF00","5":"#00FFFF","6":"#FF00C8","7":"#FF0000"};
+function parseX(code){
+  if(!code||code.indexOf(";")<0)return null;
+  const keys={c:1,u:1,h:1,d:1,z:1,a:1,"0b":1,"0l":1,"0t":1,"0o":1,"0a":1};
+  const t=code.trim().split(";"),kv={};
+  for(let i=0;i<t.length-1;){ if(keys[t[i]]){kv[t[i]]=t[i+1];i+=2;} else i++; }
+  const num=(v,lo,hi,d)=>{const n=parseFloat(v);return isNaN(n)?d:Math.max(lo,Math.min(hi,n));};
+  let color=XCOLORS[kv.c]||"#00FFFF";
+  if(kv.c==="8"&&/^[0-9A-Fa-f]{6,8}$/.test(kv.u||""))color="#"+kv.u.slice(0,6);
+  return {color,dot:kv.d==="1",dotSize:num(kv.z,1,10,2),
+    inner:(kv["0b"]||"1")!=="0",len:num(kv["0l"],0,20,4),th:num(kv["0t"],1,10,2),off:num(kv["0o"],0,20,2),op:num(kv["0a"],0,1,1)};
+}
+function drawX(cv,p){
+  const ctx=cv.getContext("2d"),W=cv.width,H=cv.height,cx=W/2,cy=H/2;
+  ctx.clearRect(0,0,W,H);ctx.fillStyle="#0b0b12";ctx.fillRect(0,0,W,H);
+  if(!p)return;
+  const s=W/26, th=Math.max(1,p.th*1.4), ln=p.len*s, off=p.off*s+th/2;
+  ctx.fillStyle=p.color;ctx.globalAlpha=p.op;
+  if(p.inner){
+    ctx.fillRect(cx-th/2,cy-off-ln,th,ln);ctx.fillRect(cx-th/2,cy+off,th,ln);
+    ctx.fillRect(cx-off-ln,cy-th/2,ln,th);ctx.fillRect(cx+off,cy-th/2,ln,th);
+  }
+  if(p.dot){ctx.beginPath();ctx.arc(cx,cy,Math.max(1,p.dotSize*1.3),0,7);ctx.fill();}
+  ctx.globalAlpha=1;
+}
+function copyText(t){
+  try{ if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t);return;} }catch(e){}
+  const ta=document.createElement("textarea");ta.value=t;ta.style.position="fixed";ta.style.opacity="0";
+  document.body.appendChild(ta);ta.select();try{document.execCommand("copy");}catch(e){}document.body.removeChild(ta);
+}
+function xcardEl(e){
+  const el=document.createElement("div");el.className="card xcard";
+  el.innerHTML=`<div class="xtop"><canvas width="92" height="92" class="xcanvas"></canvas>
+    <div class="xmeta"><div class="xname">${esc(e.name)}</div>
+      <div class="xtags">${(e.tags||[]).map(t=>`<span class="xtag">${esc(t)}</span>`).join("")}</div></div></div>
+    <div class="xcode">${esc(e.code)}</div>
+    <div class="foot"><button class="apply ghost xcopy">Copy code</button><button class="xdel" title="Delete">✕</button></div>`;
+  drawX(el.querySelector(".xcanvas"),parseX(e.code));
+  el.querySelector(".xcopy").onclick=()=>{copyText(e.code);toast("Crosshair code copied — paste it in VALORANT › Crosshair.");};
+  el.querySelector(".xdel").onclick=async()=>{const r=await call("crosshair_delete",e.id);if(r.ok){toast("Crosshair deleted.");loadCrosshairs();}else toast(r.error||"Delete failed.",true);};
+  return el;
+}
+async function loadCrosshairs(){
+  const r=await call("crosshairs");const list=r.ok?r.data:[];
+  const g=$("#xgrid");g.innerHTML="";
+  list.forEach(e=>g.appendChild(xcardEl(e)));
+  const add=document.createElement("div");add.className="add";add.style.minHeight="190px";
+  add.innerHTML='<div class="plus"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div><div class="t">Add crosshair</div><div class="s">paste a code from VALORANT</div>';
+  add.onclick=openXAdd;g.appendChild(add);
+}
+function openXAdd(){
+  $("#xf-name").value="";$("#xf-code").value="";$("#xf-tags").value="";$("#xf-err").textContent="";
+  drawX($("#xprev"),null);$("#xmodal").classList.add("show");$("#xf-name").focus();
+}
+function xPreview(){drawX($("#xprev"),parseX($("#xf-code").value));}
+async function xSave(){
+  const name=$("#xf-name").value.trim(),code=$("#xf-code").value.trim();
+  if(!name){$("#xf-err").textContent="Give it a name.";return;}
+  if(!code||code.indexOf(";")<0){$("#xf-err").textContent="Paste a valid VALORANT crosshair code.";return;}
+  const tags=$("#xf-tags").value.split(",").map(s=>s.trim()).filter(Boolean);
+  const r=await call("crosshair_add",name,code,tags,"");
+  if(!r.ok){$("#xf-err").textContent=r.error||"Could not save that code.";return;}
+  $("#xmodal").classList.remove("show");toast("Crosshair saved.");loadCrosshairs();
+}
+function setView(v){
+  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
+  $("#view-accounts").classList.toggle("hidden",v!=="accounts");
+  $("#view-crosshairs").classList.toggle("hidden",v!=="crosshairs");
+  if(v==="crosshairs")loadCrosshairs();
+}
+
 function boot(){
   if(window.__booted)return; window.__booted=1;
+  document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>setView(t.dataset.view));
+  $("#xf-cancel").onclick=()=>$("#xmodal").classList.remove("show");
+  $("#xmodal").onclick=e=>{if(e.target.id==="xmodal")$("#xmodal").classList.remove("show");};
+  $("#xf-code").addEventListener("input",xPreview);
+  $("#xf-save").onclick=xSave;
   $("#btn-add").onclick=addAccount;
   $("#btn-switch").onclick=async()=>{const r=await call("launch_riot");
     toast(r.ok?"Opening Riot Client. Sign in there, then switch back — Tune will see the account.":(r.error||"Couldn't open Riot Client."),!r.ok);};
