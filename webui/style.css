@@ -202,3 +202,14 @@ body{background:var(--bg);color:var(--ink);font-family:Inter,'Segoe UI',system-u
 .itext{width:100%;min-height:120px;resize:vertical;padding:12px 14px;border-radius:14px;background:rgba(0,0,0,.3);
   border:1px solid var(--stroke2);color:var(--ink);font-family:ui-monospace,Consolas,monospace;font-size:12px;outline:none;margin-bottom:6px}
 .itext:focus{border-color:rgba(215,242,75,.5)}
+
+/* ---------- connect-rank bar + key modal ---------- */
+.rankbar{display:flex;align-items:center;gap:14px;justify-content:space-between;margin:0 0 18px;padding:12px 16px;
+  border-radius:16px;background:rgba(215,242,75,.06);border:1px solid rgba(215,242,75,.25)}
+.rankbar span{font-size:13px;color:#dfe9bf}
+.rankbar .btn{flex:none}
+.klink{display:inline-block;margin-bottom:12px;font-size:13px;font-weight:600;color:var(--lime);background:none;border:none;cursor:pointer;padding:0}
+.klink:hover{text-decoration:underline}
+#kf-code{width:100%;padding:11px 13px;border-radius:12px;background:rgba(255,255,255,.05);border:1px solid var(--stroke2);
+  color:var(--ink);font-family:ui-monospace,Consolas,monospace;font-size:12.5px;outline:none;margin-bottom:6px}
+#kf-code:focus{border-color:rgba(215,242,75,.5)}

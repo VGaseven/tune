@@ -104,6 +104,27 @@ class Backend:
         """Optional public rank/card lookup. Network-bound - the caller runs it off the UI thread."""
         return desk_rank.lookup(puuid,region,app_dir=self.store.base,cache_dir=self.rank_cache)
 
+    def rank_key_status(self):
+        """Whether a rank API key is configured. Never returns the key itself."""
+        return {'set':bool(desk_rank.resolve_key(self.store.base))}
+
+    def set_rank_key(self,key):
+        """Store a free rank API key in the app folder only, and clear cached 'offline' results so
+        rank refetches right away. The key never leaves this PC except as the stats API's own header."""
+        key=(key or '').strip()
+        if not re.fullmatch(r'[A-Za-z0-9._-]{8,200}',key):raise ValueError('That does not look like a valid key.')
+        self.store.base.mkdir(parents=True,exist_ok=True)
+        (self.store.base/'rankkey.txt').write_text(key,encoding='utf-8')
+        try:
+            for f in self.rank_cache.glob('*.json'):f.unlink()
+        except OSError:pass
+        return {'set':True}
+
+    def clear_rank_key(self):
+        try:(self.store.base/'rankkey.txt').unlink()
+        except OSError:pass
+        return {'set':False}
+
     def riot_client(self):
         exe=dp.riot_client();return str(exe) if exe else None
 

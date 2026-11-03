@@ -1,6 +1,7 @@
 """Headless tests for tune_backend (no tkinter, no network, no pywebview). Synthetic VALORANT
 config files in a temp dir prove listing works game-open, saved labels surface on accounts, hints
 parse, apply copies only the video keys and is undoable, and apply is blocked when the guard fires."""
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -71,6 +72,18 @@ class Bulk(Base):
         self.assertIn("presetdesk-share",code)
         imp=self.be.share_import(code)
         self.assertGreaterEqual(imp["n"],2);self.assertEqual(imp["label"],"MAIN")
+
+class RankKey(Base):
+    def setUp(self):
+        super().setUp();self._old=os.environ.pop('TUNE_RANK_KEY',None)
+    def tearDown(self):
+        if self._old is not None:os.environ['TUNE_RANK_KEY']=self._old
+    def test_set_status_and_clear(self):
+        self.assertFalse(self.be.rank_key_status()['set'])
+        with self.assertRaises(ValueError):self.be.set_rank_key('')
+        self.be.set_rank_key('HDEV-1234-5678-ABCD-0000')
+        self.assertTrue(self.be.rank_key_status()['set'])
+        self.be.clear_rank_key();self.assertFalse(self.be.rank_key_status()['set'])
 
 class Guard(Base):
     def test_apply_blocked_when_guard_reports_game_open(self):

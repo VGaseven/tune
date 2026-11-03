@@ -28,6 +28,9 @@ async function call(name,...args){
   if(name==="save")return {ok:true,data:{replaced:false,label:args[1]}};
   if(name==="apply")return {ok:true,data:{applied:3}};
   if(name==="launch_riot")return {ok:true,data:{launched:true}};
+  if(name==="rank_key_status")return {ok:true,data:{set:false}};
+  if(name==="set_rank_key")return {ok:true,data:{set:true}};
+  if(name==="open_rank_help")return {ok:true,data:{opened:true}};
   if(name==="apply_to_all")return {ok:true,data:{targets:2,changed:2,results:[]}};
   if(name==="share_code")return {ok:true,data:'{"format":"presetdesk-share","version":1,"settings":{"sg.TextureQuality":"3"},"label":"daisy#EU1"}'};
   if(name==="share_import")return {ok:true,data:{label:"Shared preset",n:3}};
@@ -128,6 +131,19 @@ async function sharePreset(a){
   if(!r.ok){toast(r.error||"Couldn't make a share code.",true);return;}
   copyText(r.data);toast("Preset code copied — send it to a friend. They open it with the Import button.");
 }
+async function checkRankKey(){
+  const r=await call("rank_key_status");const set=r.ok&&r.data&&r.data.set;
+  const bar=$("#rankbar");if(bar)bar.classList.toggle("hidden",!!set);
+}
+function openKey(){$("#kf-code").value="";$("#kf-err").textContent="";$("#kmodal").classList.add("show");$("#kf-code").focus();}
+async function saveKey(){
+  const key=$("#kf-code").value.trim();
+  if(key.length<8){$("#kf-err").textContent="Paste your key first.";return;}
+  const r=await call("set_rank_key",key);
+  if(!r.ok){$("#kf-err").textContent=r.error||"That key wasn't accepted.";return;}
+  $("#kmodal").classList.remove("show");$("#rankbar").classList.add("hidden");
+  toast("Rank connected — loading your ranks…");refresh();
+}
 function openImport(){$("#if-code").value="";$("#if-err").textContent="";$("#imodal").classList.add("show");$("#if-code").focus();}
 async function doImport(){
   const text=$("#if-code").value.trim();
@@ -175,7 +191,7 @@ async function addAccount(){
 
 async function refresh(){
   const [a,p]=await Promise.all([call("accounts"),call("profiles")]);
-  if(a.ok)ACCOUNTS=a.data; if(p.ok)PROFILES=p.data; render();
+  if(a.ok)ACCOUNTS=a.data; if(p.ok)PROFILES=p.data; render(); checkRankKey();
 }
 
 /* ---------------- crosshair library ---------------- */
@@ -275,6 +291,11 @@ function boot(){
   $("#if-cancel").onclick=()=>$("#imodal").classList.remove("show");
   $("#imodal").onclick=e=>{if(e.target.id==="imodal")$("#imodal").classList.remove("show");};
   $("#if-save").onclick=doImport;
+  $("#rank-connect").onclick=openKey;
+  $("#k-get").onclick=()=>call("open_rank_help");
+  $("#kf-cancel").onclick=()=>$("#kmodal").classList.remove("show");
+  $("#kmodal").onclick=e=>{if(e.target.id==="kmodal")$("#kmodal").classList.remove("show");};
+  $("#kf-save").onclick=saveKey;
   $("#btn-add").onclick=addAccount;
   $("#btn-switch").onclick=async()=>{const r=await call("launch_riot");
     toast(r.ok?"Opening Riot Client. Sign in there, then switch back — Tune will see the account.":(r.error||"Couldn't open Riot Client."),!r.ok);};
