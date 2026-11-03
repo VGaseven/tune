@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 import tune_backend
 
-VERSION='6.3'
+VERSION='6.4'
 
 
 def resource(*parts):
@@ -69,10 +69,13 @@ def _selftest():
                 p.write_bytes(_FIX.replace(b'sg.TextureQuality=3',b'sg.TextureQuality='+str(tex).encode()))
             (base/'Logs').mkdir()
             (base/'Logs'/'ShooterGame.log').write_text(f'LogShooterGameUserSettings: Logged in user changed: {a}\n',encoding='utf-8')
+            import capture_model as m
             be=tune_backend.Backend(config,store_base=base/'app',guard=lambda:None)
             assert len(be.accounts())==2,'account scan'
-            saved=be.save(str(config/f'{a}-eu'/'Windows'/'GameUserSettings.ini'),'SELFTEST')
-            out=be.apply(saved['path'],str(config/f'{b}-eu'/'Windows'/'GameUserSettings.ini'))
+            aref=m.source_id(config/f'{a}-eu'/'Windows'/'GameUserSettings.ini')
+            bref=m.source_id(config/f'{b}-eu'/'Windows'/'GameUserSettings.ini')
+            saved=be.save(aref,'SELFTEST')
+            out=be.apply(Path(saved['path']).name,bref)
             assert out['applied']==1,'apply video key'
             assert Api(be).accounts()['ok'],'bridge envelope'
         result,detail='PASS','accounts + save + apply + bridge ok'
