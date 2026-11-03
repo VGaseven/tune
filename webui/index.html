@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tune</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Doto:wght@500;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="bg"><div class="grad"></div><div class="dots"></div><div class="spot"></div></div>
+<div class="wrap">
+  <div class="top">
+    <svg class="logo" viewBox="0 0 512 512" aria-hidden="true">
+      <rect x="138" y="135" width="236" height="150" rx="46" fill="#F4E3A8" transform="rotate(-5 256 210)"/>
+      <rect x="122" y="193" width="268" height="150" rx="58" fill="#9887E6" transform="rotate(-2 256 268)"/>
+      <g transform="rotate(3 256 330)"><rect x="131" y="255" width="250" height="150" rx="70" fill="#121216"/>
+        <path d="M198 334 L240 376 L330 280" fill="none" stroke="#fff" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/></g>
+    </svg>
+    <div class="brand"><h1>Tune</h1><p id="sub">Your accounts</p></div>
+    <div class="spacer"></div>
+    <button class="rbtn" id="btn-add" title="Save the account you're signed into" aria-label="Add account">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button class="rbtn" id="btn-switch" title="Open Riot Client to switch account" aria-label="Switch account">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 13-6M20 12a8 8 0 0 1-13 6"/><path d="M17 3v4h-4M7 21v-4h4"/></svg></button>
+  </div>
+
+  <div class="grid" id="grid"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="modal-bg" id="modal">
+  <div class="modal">
+    <div class="m-title" id="m-title">Apply to…</div>
+    <div class="m-sub" id="m-sub">Pick the account to copy these settings onto.</div>
+    <div class="m-list" id="m-list"></div>
+    <div class="m-foot"><button class="btn ghost" id="m-cancel">Cancel</button></div>
+  </div>
+</div>
+
+<template id="card-tpl">
+  <div class="card">
+    <div class="banner">
+      <div class="rr"><div class="num">—</div><div class="lab">RR</div></div>
+      <div class="rank"><span class="dot"></span><span class="rank-t">Unranked</span></div>
+      <div class="me-tag"><i></i> signed in</div>
+    </div>
+    <div class="body">
+      <div class="name"></div>
+      <div class="hints"></div>
+      <div class="foot"><div class="saved"></div><button class="apply">Apply
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></div>
+    </div>
+  </div>
+</template>
+
+<script src="app.js"></script>
+</body>
+</html>
