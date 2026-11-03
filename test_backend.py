@@ -56,6 +56,47 @@ class SaveApply(Base):
         self.be.apply(pid,self.ref(BB))
         self.assertEqual(self.be.apply(pid,self.ref(BB))['applied'],0)
 
+RIOT=('[Settings]\r\nEAresFloatSettingName::MouseSensitivity={s}\r\nEAresBoolSettingName::HasSeenSettingsTutorial={seen}\r\nEAresStringSettingName::CrosshairProfileName={x}\r\nLocalSettingsVersion=7\r\n')
+class Master(Base):
+    def setUp(self):
+        super().setUp()
+        for uid,s,seen,x in ((A,'0.163','True','frog'),(BB,'0.5','False','old')):
+            Path(self.file(uid)).with_name('RiotUserSettings.ini').write_text(RIOT.format(s=s,seen=seen,x=x),encoding='utf-8',newline='')
+    def riot(self,uid):return Path(self.file(uid)).with_name('RiotUserSettings.ini').read_text(encoding='utf-8')
+    def test_defaults_to_signed_in_and_can_be_changed(self):
+        self.assertEqual(self.be.master_ref(),self.ref(A))
+        self.be.set_master(self.ref(BB));self.assertEqual(self.be.master_ref(),self.ref(BB))
+        self.assertTrue({a['ref']:a for a in self.be.accounts()}[self.ref(BB)]['is_master'])
+    def test_apply_master_copies_prefs_and_video_verifies_and_keeps_state_flags(self):
+        self.assertFalse(self.be.sync_report(self.ref(BB))['in_sync'])
+        out=self.be.apply_master(self.ref(BB))
+        self.assertTrue(out['verified']);self.assertGreaterEqual(out['changed'],3)
+        r=self.riot(BB)
+        self.assertIn('MouseSensitivity=0.163',r);self.assertIn('CrosshairProfileName=frog',r)
+        self.assertIn('HasSeenSettingsTutorial=False',r)                 # account-state flag untouched
+        self.assertIn(b'sg.TextureQuality=3',Path(self.file(BB)).read_bytes())
+        self.assertIn('MouseSensitivity=0.163',self.riot(A))               # main only read
+        rep=self.be.sync_report(self.ref(BB));self.assertTrue(rep['in_sync']);self.assertTrue(rep['applied_at'])
+    def test_restore_puts_files_back(self):
+        before=self.riot(BB);self.be.apply_master(self.ref(BB))
+        self.be.restore_backup(self.ref(BB));self.assertEqual(self.riot(BB),before)
+    def test_refuses_main_as_target_and_when_game_open(self):
+        with self.assertRaises(ValueError):self.be.apply_master(self.ref(A))
+        def busy():raise RuntimeError('open')
+        be=B.Backend(self.config,store_base=self.base/'app',guard=busy)
+        with self.assertRaises(RuntimeError):be.apply_master(self.ref(BB))
+        self.assertIn('MouseSensitivity=0.5',self.riot(BB))
+    def test_missing_target_file_is_created_from_main(self):
+        Path(self.file(BB)).with_name('RiotUserSettings.ini').unlink()
+        self.assertTrue(self.be.apply_master(self.ref(BB))['verified'])
+        self.assertIn('MouseSensitivity=0.163',self.riot(BB))
+    def test_blank_video_stub_gets_main_video_file(self):
+        Path(self.file(BB)).write_bytes(bytes([13,10]))
+        out=self.be.apply_master(self.ref(BB));self.assertTrue(out['verified']);self.assertIsNone(out['video_note'])
+        self.assertEqual(Path(self.file(BB)).read_bytes(),Path(self.file(A)).read_bytes())
+    def test_master_summary_reads_sens(self):
+        m=self.be.master();self.assertEqual(m['sens'],0.163);self.assertEqual(m['game_settings'],2)
+
 class Settings(Base):
     def test_account_settings_lists_named_values(self):
         rows=self.be.account_settings(self.ref(A))

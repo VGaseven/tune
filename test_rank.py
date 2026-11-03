@@ -43,9 +43,9 @@ class Lookup(unittest.TestCase):
             self.assertEqual(out['source'],'online')
             self.assertEqual((out['name'],out['tag'],out['rank'],out['rr']),('daisy','EU1','Immortal 2',42))
             self.assertIn('largeart.png',out['card_url']);self.assertEqual(R.display(out),'daisy#EU1')
-            self.assertEqual(R.rank_label(out),'Immortal 2');self.assertEqual(len(calls),2)
+            self.assertEqual(R.rank_label(out),'Immortal 2');self.assertEqual(len(calls),3)
             again=R.lookup(PUUID,'eu',key='SECRETKEY123',cache_dir=d,fetch=fetch)
-            self.assertEqual(again['source'],'cache');self.assertEqual(len(calls),2)   # served from cache
+            self.assertEqual(again['source'],'cache');self.assertEqual(len(calls),3)   # served from cache
             self.assertNotIn('SECRETKEY123',(Path(d)/f'{PUUID}.json').read_text(encoding='utf-8'))
     def test_offline_without_key(self):
         out=R.lookup(PUUID,'eu',key='',fetch=feed)
@@ -67,6 +67,28 @@ class Lookup(unittest.TestCase):
             calls=[]
             R.lookup(PUUID,'eu',key='k',cache_dir=d,fetch=lambda u:calls.append(u) or feed(u))
             self.assertTrue(calls)   # stale cache was ignored
+
+class Stats(unittest.TestCase):
+    MMR3={'data':{'current':{'tier':{'id':16,'name':'Platinum 2'},'rr':24},'peak':{'tier':{'name':'Diamond 2'}},
+                  'seasonal':[{'wins':1,'games':9},{'wins':39,'games':74}]}}
+    MATCHES={'data':[{'stats':{'shots':{'head':9,'body':19,'leg':0}}},{'stats':{'shots':{'head':1,'body':0,'leg':1}}},{'stats':{}}]}
+    def test_v3_rank_peak_icon_and_real_stats(self):
+        feed3=lambda u:ACCOUNT if 'account' in u else self.MATCHES if 'stored-matches' in u else self.MMR3
+        out=R.lookup(PUUID,'eu',key='k',fetch=feed3)
+        self.assertEqual((out['rank'],out['rr'],out['peak']),('Platinum 2',24,'Diamond 2'))
+        self.assertIn('/16/largeicon.png',out['rank_icon'])
+        self.assertEqual((out['wr'],out['wins'],out['games']),(53,39,74))       # current act only
+        self.assertEqual((out['hs'],out['hs_matches']),(33.3,2))               # 10 of 30 shots
+    def test_no_data_means_none_not_zero(self):
+        s=R.stats(None,{'data':'garbage'})
+        self.assertIsNone(s['wr']);self.assertIsNone(s['hs']);self.assertEqual(s['hs_matches'],0)
+    def test_partial_result_is_not_cached(self):
+        def flaky(u):
+            if 'stored-matches' in u:raise R.RankError('network')
+            return feed(u)
+        with tempfile.TemporaryDirectory() as d:
+            R.lookup(PUUID,'eu',key='k',cache_dir=d,fetch=flaky)
+            self.assertFalse((Path(d)/f'{PUUID}.json').exists())
 
 if __name__=='__main__':
     unittest.main()

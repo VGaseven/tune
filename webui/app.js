@@ -1,314 +1,209 @@
 "use strict";
-/* Tune front-end. Talks to the Python backend via window.pywebview.api when running in the app,
-   and falls back to MOCK data so the same files render in a plain browser (preview / CI). */
+/* Tune front-end - one page. Left: your registered accounts. Right: the selected account's rank,
+   stats, the shared settings from your MAIN account, and its crosshair. Talks to Python through
+   window.pywebview.api. Nothing is ever invented: missing data shows "Unavailable". The tiny PREVIEW
+   mock exists only for ?preview=1 design checks in a plain browser - the real app never uses it. */
 
-const MOCK = {
-  accounts: [
-    {ref:"a",path:"A",account:"p1-eu",puuid:"p1",region:"eu",signed_in:true,saved:"daisy#EU1",
-     last_saved:new Date(Date.now()-7200e3).toISOString(),hints:{resolution:"1920×1080",fps:"0",vsync:"Off"}},
-    {ref:"b",path:"B",account:"p2-na",puuid:"p2",region:"na",signed_in:false,saved:null,
-     last_saved:null,hints:{resolution:"2560×1440",fps:"240",vsync:"Off"}},
-    {ref:"c",path:"C",account:"p3-eu",puuid:"p3",region:"eu",signed_in:false,saved:"kaya#EU2",
-     last_saved:new Date(Date.now()-3*864e5).toISOString(),hints:{resolution:"1920×1080",fps:"0",vsync:"On"}}
-  ],
-  profiles:[{ref:"a",id:"profA",path:"profA",label:"daisy#EU1"},{ref:"c",id:"profC",path:"profC",label:"kaya#EU2"}],
-  rank:{p1:{name:"daisy",tag:"EU1",rank:"Immortal 2",rr:42,source:"online"},
-        p3:{name:"kaya",tag:"EU2",rank:"Platinum 1",rr:12,source:"online"}},
-  crosshairs:[{id:"x1",name:"My main",code:"0;P;c;5;h;0;0l;4;0o;2;0a;1;d;1;z;2",tags:["Pros","clean"]},
-              {id:"x2",name:"Fun dot",code:"0;P;c;6;d;1;z;3;a;1;0b;0",tags:["Fun"]}]
-};
-const BANNERS=["b0","b1","b2","b3"];
 const hasApi=()=>!!(window.pywebview&&window.pywebview.api);
-const PREVIEW=/[?&]preview=1/.test(location.search); // demo data is ONLY used in the browser preview
-
+const PREVIEW=/[?&]preview=1/.test(location.search);
+const PMOCK={accounts:[{ref:"a",account:"p1-eu",puuid:"p1",region:"eu",signed_in:true,sens:0.4,is_master:true},
+                       {ref:"b",account:"p2-eu",puuid:"p2",region:"eu",signed_in:false,sens:0.5,is_master:false}],
+  master:{ref:"a",sens:0.4,ads:1,game_settings:60,resolution:"1920×1080",video:[{key:"sg.TextureQuality",name:"Textures",value:"3"}],
+          crosshair:{name:"Preview",color:"#00ffff",outline:true,outline_thickness:1,outline_opacity:.5,dot:false,dot_size:2,dot_opacity:1,
+                     inner:{show:true,thickness:2,length:4,vlength:4,offset:2,opacity:1},outer:{show:false}}}};
 async function call(name,...args){
   if(hasApi()) return await window.pywebview.api[name](...args);
-  if(!PREVIEW) return {ok:false,error:"Tune engine not connected yet."};   // real app never uses demo data
-  if(name==="rank"){const d=MOCK.rank[args[0]]||{source:"offline"};return {ok:true,data:d};}
-  if(name==="accounts")return {ok:true,data:MOCK.accounts};
-  if(name==="profiles")return {ok:true,data:MOCK.profiles};
-  if(name==="save")return {ok:true,data:{replaced:false,label:args[1]}};
-  if(name==="apply")return {ok:true,data:{applied:3}};
-  if(name==="launch_riot")return {ok:true,data:{launched:true}};
+  if(!PREVIEW) return {ok:false,error:"Tune engine not connected yet."};
+  if(name==="accounts")return {ok:true,data:PMOCK.accounts};
+  if(name==="master")return {ok:true,data:PMOCK.master};
+  if(name==="sync_report")return {ok:true,data:args[0]==="a"?{master:true,in_sync:true}:{master:false,in_sync:false,differ:12,total:72}};
   if(name==="rank_key_status")return {ok:true,data:{set:false}};
-  if(name==="set_rank_key")return {ok:true,data:{set:true}};
-  if(name==="open_rank_help")return {ok:true,data:{opened:true}};
-  if(name==="apply_to_all")return {ok:true,data:{targets:2,changed:2,results:[]}};
-  if(name==="share_code")return {ok:true,data:'{"format":"presetdesk-share","version":1,"settings":{"sg.TextureQuality":"3"},"label":"daisy#EU1"}'};
-  if(name==="share_import")return {ok:true,data:{label:"Shared preset",n:3}};
-  if(name==="settings")return {ok:true,data:[{name:"View distance",value:"3"},{name:"Textures",value:"3"},{name:"Shadows",value:"2"},{name:"Anti-aliasing",value:"2"},{name:"VSync",value:"Off"},{name:"Frame-rate limit",value:"240"}]};
-  if(name==="crosshairs")return {ok:true,data:MOCK.crosshairs};
-  if(name==="crosshair_add"){const e={id:"x"+Date.now(),name:args[0],code:args[1],tags:args[2]||[]};MOCK.crosshairs.unshift(e);return {ok:true,data:e};}
-  if(name==="crosshair_delete"){MOCK.crosshairs=MOCK.crosshairs.filter(c=>c.id!==args[0]);return {ok:true,data:true};}
-  return {ok:false,error:"unavailable"};
+  return {ok:true,data:{source:"offline"}};
 }
 
 const $=s=>document.querySelector(s);
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmtSens=v=>v==null?null:String(Math.round(v*1000)/1000);
 function ago(iso){ if(!iso) return ""; const s=(Date.now()-new Date(iso))/1000;
   if(s<90)return"just now"; if(s<5400)return Math.round(s/60)+"m ago";
   if(s<86400)return Math.round(s/3600)+"h ago"; return Math.round(s/86400)+"d ago"; }
-
 let toastTimer;
 function toast(msg,bad){ const t=$("#toast"); t.textContent=msg; t.className="toast show"+(bad?" bad":"");
-  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.className="toast",3200); }
+  clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.className="toast",3600); }
 
-let ACCOUNTS=[], PROFILES=[];
-const profileFor=ref=>PROFILES.find(p=>p.ref===ref);
+let ACCOUNTS=[], MASTER=null, RANK={}, SYNC={}, SEL=null, KEY=false, RETRIED={};
+const store={get(k){try{return localStorage.getItem(k)}catch(e){return null}},set(k,v){try{localStorage.setItem(k,v)}catch(e){}}};
+const acc=ref=>ACCOUNTS.find(a=>a.ref===ref);
+const masterAcc=()=>ACCOUNTS.find(a=>a.is_master);
+function riotId(a){const r=RANK[a.puuid];return r&&r.name?{name:r.name,tag:r.tag?"#"+r.tag:""}:{name:"Account "+a.puuid.slice(0,4),tag:""};}
+const wide=u=>u?u.replace("largeart.png","wideart.png"):null;
 
-function render(){
-  const grid=$("#grid"); grid.innerHTML="";
-  const signed=ACCOUNTS.some(a=>a.signed_in);
+/* ---------------- account list ---------------- */
+function renderList(){
+  const list=$("#list"); list.innerHTML="";
   $("#sub").textContent=ACCOUNTS.length?`${ACCOUNTS.length} account${ACCOUNTS.length>1?"s":""} on this PC`:"Your accounts";
-  if(!ACCOUNTS.length){grid.innerHTML='<div class="empty">No VALORANT accounts found yet. Sign in once, then add it.</div>';}
-  ACCOUNTS.forEach((a,i)=>grid.appendChild(cardEl(a,i)));
-  const add=document.createElement("div"); add.className="add"; add.innerHTML=
-    '<div class="plus"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div>'+
-    '<div class="t">Add account</div><div class="s">'+(signed?"save the account you're signed into":"sign in to an account first")+'</div>';
-  add.onclick=addAccount; grid.appendChild(add);
-}
-
-function cardEl(a,i){
-  const el=document.createElement("div"); el.className="card"+(a.signed_in?" me":""); el.style.animationDelay=(i*0.05)+"s";
-  const h=a.hints||{}, letter=(a.saved||a.account||"?").trim()[0].toUpperCase();
-  const chips=[h.resolution&&`<div class="chip"><b>${esc(h.resolution)}</b></div>`,
-               h.fps!=null&&`<div class="chip"><b>${esc(h.fps)}</b> fps</div>`,
-               h.vsync&&`<div class="chip">VSync <b>${esc(h.vsync)}</b></div>`].filter(Boolean).join("");
-  const canApply=!!profileFor(a.ref);
-  el.innerHTML=
-    `<div class="banner ${BANNERS[i%4]}">
-       <div class="rr hidden"><div class="num">—</div><div class="lab">RR</div></div>
-       <div class="rank hidden"><span class="dot"></span><span class="rank-t">Unranked</span></div>
-       <div class="avatar">${esc(letter)}</div>
-       ${a.signed_in?'<div class="me-dot"><i></i> signed in</div>':""}
-     </div>
-     <div class="body">
-       <div class="name">${esc(a.saved||("Account "+a.puuid.slice(0,4)))}</div>
-       <div class="hints">${chips||'<div class="chip">no settings read yet</div>'}</div>
-       <div class="foot">
-         <div class="saved">${a.last_saved?"Saved · "+ago(a.last_saved):"Not saved yet"}</div>
-         <div class="acts">
-           ${canApply?`<button class="mini-btn toall" title="Copy to all accounts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l9 5-9 5-9-5 9-5z"/><path d="M3 14l9 5 9-5"/></svg></button><button class="mini-btn share" title="Share preset"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="12" r="2.4"/><circle cx="18" cy="6" r="2.4"/><circle cx="18" cy="18" r="2.4"/><path d="M8 11l8-4M8 13l8 4"/></svg></button>`:""}
-           <button class="apply${a.signed_in?"":" ghost"}" ${canApply?"":"disabled"}>Apply
-             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-         </div>
-       </div>
-     </div>`;
-  el.querySelector(".apply").onclick=()=>openApply(a);
-  const toall=el.querySelector(".toall");if(toall)toall.onclick=()=>copyToAll(a);
-  const sh=el.querySelector(".share");if(sh)sh.onclick=()=>sharePreset(a);
-  if(a.puuid) loadRank(a,el);
-  return el;
-}
-
-async function loadRank(a,el){
-  const r=await call("rank",a.puuid,a.region); if(!r.ok||!r.data) return; const d=r.data;
-  if(d.source==="offline") return;
-  if(d.rr!=null){el.querySelector(".rr .num").textContent=d.rr;el.querySelector(".rr").classList.remove("hidden");}
-  if(d.rank){el.querySelector(".rank-t").textContent=d.rank;el.querySelector(".rank").classList.remove("hidden");}
-  if(d.card_url){const b=el.querySelector(".banner");b.style.backgroundImage=`linear-gradient(180deg,rgba(0,0,0,.12),rgba(0,0,0,.4)),url("${d.card_url}")`;b.style.backgroundSize="cover";b.style.backgroundPosition="center";}
-  if(d.name&&d.tag&&!a.saved) el.querySelector(".name").innerHTML=esc(d.name)+'<b>#'+esc(d.tag)+'</b>';
-}
-
-function confirmModal(title,sub,okText,onOk){
-  $("#m-title").textContent=title;$("#m-sub").textContent=sub;
-  const list=$("#m-list");list.innerHTML="";
-  const b=document.createElement("button");b.className="btn primary";b.textContent=okText;
-  b.onclick=()=>{closeModal();onOk();};list.appendChild(b);
-  $("#modal").classList.add("show");
-}
-function copyToAll(a){
-  const prof=profileFor(a.ref);if(!prof){toast("Save this account first.",true);return;}
-  const others=ACCOUNTS.filter(x=>x.ref!==a.ref).length;
-  if(!others){toast("You need another account to copy onto.",true);return;}
-  confirmModal("Copy to all accounts",`This copies ${prof.label}'s video settings onto every other account (${others}). The game must be closed; each account is backed up first.`,"Copy to all",async()=>{
-    toast("Copying to all…");const r=await call("apply_to_all",prof.id);
-    if(!r.ok){toast(r.error||"Couldn't copy.",true);return;}
-    toast(`Copied to ${r.data.changed} account${r.data.changed===1?"":"s"} of ${r.data.targets}.`);refresh();
-  });
-}
-async function sharePreset(a){
-  const prof=profileFor(a.ref);if(!prof){toast("Save this account first.",true);return;}
-  const r=await call("share_code",prof.id);
-  if(!r.ok){toast(r.error||"Couldn't make a share code.",true);return;}
-  copyText(r.data);toast("Preset code copied — send it to a friend. They open it with the Import button.");
-}
-async function checkRankKey(){
-  const r=await call("rank_key_status");const set=r.ok&&r.data&&r.data.set;
-  const bar=$("#rankbar");if(bar)bar.classList.toggle("hidden",!!set);
-}
-function openKey(){$("#kf-code").value="";$("#kf-err").textContent="";$("#kmodal").classList.add("show");$("#kf-code").focus();}
-async function saveKey(){
-  const key=$("#kf-code").value.trim();
-  if(key.length<8){$("#kf-err").textContent="Paste your key first.";return;}
-  const r=await call("set_rank_key",key);
-  if(!r.ok){$("#kf-err").textContent=r.error||"That key wasn't accepted.";return;}
-  $("#kmodal").classList.remove("show");$("#rankbar").classList.add("hidden");
-  toast("Rank connected — loading your ranks…");refresh();
-}
-function openImport(){$("#if-code").value="";$("#if-err").textContent="";$("#imodal").classList.add("show");$("#if-code").focus();}
-async function doImport(){
-  const text=$("#if-code").value.trim();
-  if(!text){$("#if-err").textContent="Paste a preset code first.";return;}
-  const r=await call("share_import",text);
-  if(!r.ok){$("#if-err").textContent=r.error||"That code is not valid.";return;}
-  $("#imodal").classList.remove("show");toast(`Imported "${r.data.label}" (${r.data.n} settings) — find it under Accounts.`);refresh();
-}
-function openApply(source){
-  const prof=profileFor(source.ref); if(!prof){toast("Save this account first, then you can copy its settings.",true);return;}
-  const targets=ACCOUNTS.filter(a=>a.ref!==source.ref);
-  if(!targets.length){toast("You need a second account to copy settings onto.",true);return;}
-  $("#m-title").textContent=`Apply ${esc(prof.label)} →`;
-  $("#m-sub").textContent="Pick the account to copy these video settings onto. The game must be closed.";
-  const list=$("#m-list"); list.innerHTML="";
-  targets.forEach(t=>{ const row=document.createElement("div"); row.className="m-row";
-    row.innerHTML=`<div class="mini">${esc((t.saved||t.account||"?").trim()[0].toUpperCase())}</div>
-      <div><div class="mn">${esc(t.saved||("Account "+t.puuid.slice(0,4)))}</div><div class="ms">${esc(t.account)}</div></div>`;
-    row.onclick=()=>doApply(prof,t); list.appendChild(row); });
-  $("#modal").classList.add("show");
-}
-const closeModal=()=>$("#modal").classList.remove("show");
-
-async function doApply(prof,target){
-  closeModal(); toast("Applying…");
-  const r=await call("apply",prof.id,target.ref);
-  if(!r.ok){toast(r.error||"Apply failed.",true);return;}
-  const n=r.data&&r.data.applied;
-  toast(n?`Applied ${n} video setting${n>1?"s":""} to ${target.saved||target.account}. Undo stays available.`:"Already matched — nothing changed.");
-  await refresh();
-}
-
-async function addAccount(){
-  const me=ACCOUNTS.find(a=>a.signed_in);
-  if(!me){toast("Sign in to a VALORANT account first, then add it.",true);return;}
-  let label=me.saved; // keep existing label on re-save
-  if(!label){ const r=await call("rank",me.puuid,me.region); const d=r.ok&&r.data;
-    label=(d&&d.name&&d.tag)?`${d.name}#${d.tag}`:("Account "+me.puuid.slice(0,4)); }
-  toast("Saving…");
-  const r=await call("save",me.ref,label);
-  if(!r.ok){toast(r.error||"Save failed.",true);return;}
-  toast(`${r.data&&r.data.replaced?"Updated":"Saved"} ${esc(label)}.`);
-  await refresh();
-}
-
-async function refresh(){
-  const [a,p]=await Promise.all([call("accounts"),call("profiles")]);
-  if(a.ok)ACCOUNTS=a.data; if(p.ok)PROFILES=p.data; render(); checkRankKey();
-}
-
-/* ---------------- crosshair library ---------------- */
-const XCOLORS={"0":"#FFFFFF","1":"#00FF00","2":"#ADFF2F","3":"#CCFF00","4":"#FFFF00","5":"#00FFFF","6":"#FF00C8","7":"#FF0000"};
-function parseX(code){
-  if(!code||code.indexOf(";")<0)return null;
-  const keys={c:1,u:1,h:1,d:1,z:1,a:1,"0b":1,"0l":1,"0t":1,"0o":1,"0a":1};
-  const t=code.trim().split(";"),kv={};
-  for(let i=0;i<t.length-1;){ if(keys[t[i]]){kv[t[i]]=t[i+1];i+=2;} else i++; }
-  const num=(v,lo,hi,d)=>{const n=parseFloat(v);return isNaN(n)?d:Math.max(lo,Math.min(hi,n));};
-  let color=XCOLORS[kv.c]||"#00FFFF";
-  if(kv.c==="8"&&/^[0-9A-Fa-f]{6,8}$/.test(kv.u||""))color="#"+kv.u.slice(0,6);
-  return {color,dot:kv.d==="1",dotSize:num(kv.z,1,10,2),
-    inner:(kv["0b"]||"1")!=="0",len:num(kv["0l"],0,20,4),th:num(kv["0t"],1,10,2),off:num(kv["0o"],0,20,2),op:num(kv["0a"],0,1,1)};
-}
-function drawX(cv,p){
-  const ctx=cv.getContext("2d"),W=cv.width,H=cv.height,cx=W/2,cy=H/2;
-  ctx.clearRect(0,0,W,H);ctx.fillStyle="#0b0b12";ctx.fillRect(0,0,W,H);
-  if(!p)return;
-  const s=W/26, th=Math.max(1,p.th*1.4), ln=p.len*s, off=p.off*s+th/2;
-  ctx.fillStyle=p.color;ctx.globalAlpha=p.op;
-  if(p.inner){
-    ctx.fillRect(cx-th/2,cy-off-ln,th,ln);ctx.fillRect(cx-th/2,cy+off,th,ln);
-    ctx.fillRect(cx-off-ln,cy-th/2,ln,th);ctx.fillRect(cx+off,cy-th/2,ln,th);
+  if(!ACCOUNTS.length){
+    list.innerHTML='<div class="empty">No VALORANT accounts on this PC yet.<br>Sign in once in VALORANT and the account appears here.<br><button class="btn primary" id="e-signin">Open Riot Client</button></div>';
+    $("#e-signin").onclick=signIn; $("#detail").classList.add("hidden"); return;
   }
-  if(p.dot){ctx.beginPath();ctx.arc(cx,cy,Math.max(1,p.dotSize*1.3),0,7);ctx.fill();}
+  ACCOUNTS.forEach((a,i)=>{const el=document.createElement("div");el.className="acc";el.dataset.ref=a.ref;
+    el.style.animationDelay=(i*0.04)+"s";el.onclick=()=>select(a.ref);list.appendChild(el);paintRow(a);});
+}
+function paintRow(a){
+  const el=document.querySelector(`.acc[data-ref="${a.ref}"]`); if(!el) return;
+  const r=RANK[a.puuid], id=riotId(a), s=SYNC[a.ref];
+  const msens=MASTER&&MASTER.sens, same=a.is_master||(a.sens!=null&&msens!=null&&Math.abs(a.sens-msens)<1e-4);
+  const dot=a.is_master?"ok":s?(s.in_sync?"ok":"warn"):"";
+  el.classList.toggle("sel",a.ref===SEL);
+  el.style.setProperty("--art",r&&r.card_url?`url("${wide(r.card_url)}")`:"none");
+  const loading=KEY&&!r;
+  el.innerHTML=`<div class="who"><div class="nm">${esc(id.name)}<b>${esc(id.tag)}</b>${a.is_master?'<span class="pill main">MAIN</span>':""}</div>
+      <div class="mini"><span title="${same?"Matches your main":"Differs from your main"}"><span class="sdot ${dot}" style="display:inline-block;margin-right:5px"></span>Sens <b>${esc(fmtSens(a.sens)??"—")}</b></span>
+      <span>HS <b>${r&&r.hs!=null?r.hs+"%":loading?"…":"—"}</b></span><span>WR <b>${r&&r.wr!=null?r.wr+"%":loading?"…":"—"}</b></span></div></div>
+    <div class="rkbox"><div class="rkn">${r&&r.rank?esc(r.rank):loading?"…":"Unavailable"}</div>${r&&r.rank_icon?`<img class="emblem" src="${esc(r.rank_icon)}" alt="">`:""}</div>`;
+}
+
+/* ---------------- detail ---------------- */
+function select(ref){
+  if(!acc(ref)) return; const changed=SEL!==ref; SEL=ref; store.set("tune.sel",ref);
+  document.querySelectorAll(".acc").forEach(e=>e.classList.toggle("sel",e.dataset.ref===ref));
+  const d=$("#detail"); d.classList.remove("hidden");
+  if(changed){d.classList.remove("swap");void d.offsetWidth;d.classList.add("swap");$("#signin").classList.remove("ready");}
+  paintDetail(); loadSync(ref);
+}
+function stat(id,value,note){const v=$("#"+id);v.textContent=value??"Unavailable";v.classList.toggle("na",value==null);$("#"+id+"-n").textContent=note||"";}
+function paintDetail(){
+  const a=acc(SEL); if(!a) return; const r=RANK[a.puuid]||{}, id=riotId(a);
+  $("#d-name").textContent=id.name; $("#d-tag").textContent=id.tag; $("#d-main").classList.toggle("hidden",!a.is_master);
+  $("#hero-art").style.backgroundImage=r.card_url?`url("${wide(r.card_url)}")`:"none";
+  $("#d-rank").textContent=r.rank||(KEY&&!RANK[a.puuid]?"Loading…":"Unavailable");
+  const sub=[r.rr!=null&&r.rank&&r.rank!=="Unrated"?r.rr+" RR":null,r.peak?"Peak "+r.peak:null].filter(Boolean).join(" · ");
+  $("#d-rksub").textContent=sub||(!KEY?"Connect the free key to see rank":"");
+  const em=$("#d-emblem"); if(r.rank_icon){em.src=r.rank_icon;em.classList.remove("hidden");}else em.classList.add("hidden");
+  const ms=MASTER&&MASTER.sens;
+  const own=!a.is_master&&a.sens!=null&&ms!=null&&Math.abs(a.sens-ms)>1e-4?`this account now: ${fmtSens(a.sens)}`:(MASTER&&MASTER.ads!=null?`ADS ${fmtSens(MASTER.ads)} · from main`:"from main");
+  stat("d-sens",fmtSens(ms),ms!=null?own:"Main account has no saved sensitivity");
+  stat("d-hs",r.hs!=null?r.hs+"%":null,r.hs!=null?`last ${r.hs_matches} competitive match${r.hs_matches===1?"":"es"}`:"");
+  stat("d-wr",r.wr!=null?r.wr+"%":null,r.wr!=null?`${r.wins}W · ${r.games} games this act`:"");
+  paintMaster(a); paintSync(a);
+}
+function paintMaster(a){
+  const m=MASTER, rows=$("#m-rows"); const ma=masterAcc();
+  $("#m-from").textContent=ma?`Shared from ${riotId(ma).name}${riotId(ma).tag} — your main account`:"Pick a main account";
+  $("#set-main").classList.toggle("hidden",!!a.is_master);
+  if(!m||!m.ref){rows.innerHTML='<div class="row"><span>No main account yet</span><b>—</b></div>';drawX(null);$("#x-name").textContent="Unavailable";return;}
+  const keep=(m.video||[]).filter(v=>v.key!=="bUseVSync"&&v.key!=="FrameRateLimit");
+  rows.innerHTML=[["Sensitivity",fmtSens(m.sens)??"Unavailable",1],["Scoped / ADS",fmtSens(m.ads)??"Unavailable",1],
+    ["Resolution",m.resolution||"Unavailable"],...keep.map(v=>[v.name,v.value]),["Game settings",`${m.game_settings} synced`]]
+    .map(([k,v,key])=>`<div class="row${key?" key":""}"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join("");
+  $("#x-name").textContent=m.crosshair?m.crosshair.name:"Unavailable"; drawX(m.crosshair);
+}
+function paintSync(a){
+  const s=SYNC[a.ref], box=$("#sync"), t=$("#sync-t"), ap=$("#apply"), rs=$("#restore");
+  box.className="sync"; ap.disabled=!!a.is_master||!MASTER||!MASTER.ref; rs.classList.toggle("hidden",!(s&&s.has_backup));
+  if(a.is_master){box.classList.add("ok");t.textContent="This is your main account — every other account copies these settings.";return;}
+  if(!s){t.textContent="Checking…";return;}
+  if(s.in_sync){box.classList.add("ok");t.textContent="Matches your main"+(s.applied_at?` · applied & verified ${ago(s.applied_at)}`:"");return;}
+  box.classList.add("warn");
+  t.textContent=s.applied_at?`${s.differ} setting${s.differ===1?"":"s"} changed since you applied (${ago(s.applied_at)}) — Riot may have restored its cloud copy. Apply again.`
+                            :`${s.differ} of ${s.total} settings differ from your main.`;
+}
+async function loadSync(ref){
+  const r=await call("sync_report",ref); if(r.ok){SYNC[ref]=r.data; const a=acc(ref); if(a){paintRow(a); if(ref===SEL)paintSync(a);}}
+}
+
+/* ---------------- crosshair preview (from the main account's active profile) ---------------- */
+function drawX(x){
+  const cv=$("#xcanvas"),ctx=cv.getContext("2d"),W=cv.width,H=cv.height,cx=Math.round(W/2),cy=Math.round(H/2),u=4;
+  const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,"#5b6470");g.addColorStop(1,"#2a2f36");
+  ctx.fillStyle=g;ctx.fillRect(0,0,W,H); if(!x) return;
+  const ot=x.outline?Math.max(1,x.outline_thickness)*u:0;
+  const box=(x0,y0,w,h,alpha)=>{ if(ot){ctx.globalAlpha=x.outline_opacity*alpha;ctx.fillStyle="#000";ctx.fillRect(x0-ot,y0-ot,w+2*ot,h+2*ot);}
+    ctx.globalAlpha=alpha;ctx.fillStyle=x.color;ctx.fillRect(x0,y0,w,h); };
+  const arms=l=>{ if(!l||!l.show) return; const t=l.thickness*u,L=l.length*u,V=(l.vlength||l.length)*u,o=l.offset*u,h=t/2;
+    box(cx+h+o,cy-h,L,t,l.opacity); box(cx-h-o-L,cy-h,L,t,l.opacity);
+    box(cx-h,cy-h-o-V,t,V,l.opacity); box(cx-h,cy+h+o,t,V,l.opacity); };
+  arms(x.inner); arms(x.outer);
+  if(x.dot){const s=x.dot_size*u;box(cx-s/2,cy-s/2,s,s,x.dot_opacity);}
   ctx.globalAlpha=1;
 }
-function copyText(t){
-  try{ if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t);return;} }catch(e){}
-  const ta=document.createElement("textarea");ta.value=t;ta.style.position="fixed";ta.style.opacity="0";
-  document.body.appendChild(ta);ta.select();try{document.execCommand("copy");}catch(e){}document.body.removeChild(ta);
+
+/* ---------------- actions ---------------- */
+let onOk=null;
+function confirmBox(title,sub,ok,fn){$("#c-title").textContent=title;$("#c-sub").textContent=sub;$("#c-ok").textContent=ok;onOk=fn;$("#modal").classList.add("show");}
+const closeBox=()=>$("#modal").classList.remove("show");
+function applyClick(){
+  const a=acc(SEL), ma=masterAcc(); if(!a||!ma||a.is_master) return;
+  confirmBox(`Apply settings to ${riotId(a).name}?`,
+    `Copies ${riotId(ma).name}'s sensitivity, crosshair, video and game settings onto this account, then reads the files back to verify.\nVALORANT and Riot Client must be closed. This account is backed up first, so you can undo.`,
+    "Apply settings",async()=>{
+      const b=$("#apply");b.classList.add("busy");
+      const r=await call("apply_master",a.ref);b.classList.remove("busy");
+      if(!r.ok){toast(r.error||"Apply failed.",true);return;}
+      toast(r.data.video_note?`Game settings applied & verified ✓ — video settings skipped: ${r.data.video_note}`
+        :`Applied & verified ✓ ${r.data.changed} setting${r.data.changed===1?"":"s"} updated. Now sign in.`,!!r.data.video_note);
+      await refreshAccounts(); $("#signin").classList.add("ready"); loadSync(a.ref);
+    });
 }
-function xcardEl(e){
-  const el=document.createElement("div");el.className="card xcard";
-  el.innerHTML=`<div class="xtop"><canvas width="92" height="92" class="xcanvas"></canvas>
-    <div class="xmeta"><div class="xname">${esc(e.name)}</div>
-      <div class="xtags">${(e.tags||[]).map(t=>`<span class="xtag">${esc(t)}</span>`).join("")}</div></div></div>
-    <div class="xcode">${esc(e.code)}</div>
-    <div class="foot"><button class="apply ghost xcopy">Copy code</button><button class="xdel" title="Delete">✕</button></div>`;
-  drawX(el.querySelector(".xcanvas"),parseX(e.code));
-  el.querySelector(".xcopy").onclick=()=>{copyText(e.code);toast("Crosshair code copied — paste it in VALORANT › Crosshair.");};
-  el.querySelector(".xdel").onclick=async()=>{const r=await call("crosshair_delete",e.id);if(r.ok){toast("Crosshair deleted.");loadCrosshairs();}else toast(r.error||"Delete failed.",true);};
-  return el;
+async function signIn(){const r=await call("launch_riot");
+  toast(r.ok?"Opening Riot Client — sign in to the account there.":(r.error||"Couldn't open Riot Client."),!r.ok);}
+function restoreClick(){const a=acc(SEL);if(!a)return;
+  confirmBox("Undo last apply?",`Puts ${riotId(a).name}'s settings files back exactly as they were before the last Apply. VALORANT and Riot Client must be closed.`,"Undo",async()=>{
+    const r=await call("restore_backup",a.ref); if(!r.ok){toast(r.error||"Undo failed.",true);return;}
+    toast("Restored."); await refreshAccounts(); loadSync(a.ref);});}
+function setMainClick(){const a=acc(SEL);if(!a)return;
+  confirmBox(`Make ${riotId(a).name} your main?`,"Every other account will copy this account's settings when you press Apply. Nothing is changed until you apply.","Make main",async()=>{
+    const r=await call("set_master",a.ref); if(!r.ok){toast(r.error||"Couldn't change main.",true);return;}
+    toast(`${riotId(a).name} is now your main.`); SYNC={}; await refresh();});}
+
+/* ---------------- rank key ---------------- */
+function openKey(){$("#kf-code").value="";$("#kf-err").textContent="";$("#kmodal").classList.add("show");$("#kf-code").focus();}
+async function saveKey(){
+  const key=$("#kf-code").value.trim(); if(key.length<8){$("#kf-err").textContent="Paste your key first.";return;}
+  const r=await call("set_rank_key",key); if(!r.ok){$("#kf-err").textContent=r.error||"That key wasn't accepted.";return;}
+  $("#kmodal").classList.remove("show"); toast("Key saved — loading ranks and stats…"); RANK={}; refresh();
 }
-async function loadCrosshairs(){
-  const r=await call("crosshairs");const list=r.ok?r.data:[];
-  const g=$("#xgrid");g.innerHTML="";
-  list.forEach(e=>g.appendChild(xcardEl(e)));
-  const add=document.createElement("div");add.className="add";add.style.minHeight="190px";
-  add.innerHTML='<div class="plus"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div><div class="t">Add crosshair</div><div class="s">paste a code from VALORANT</div>';
-  add.onclick=openXAdd;g.appendChild(add);
+
+/* ---------------- data ---------------- */
+async function loadRanks(){
+  if(!KEY) return;
+  await Promise.all(ACCOUNTS.map(async a=>{ if(RANK[a.puuid]) return;
+    const r=await call("rank",a.puuid,a.region); const d=r.ok&&r.data&&r.data.source!=="offline"?r.data:{};
+    RANK[a.puuid]=d; paintRow(a); if(a.ref===SEL) paintDetail();
+    if((!d.rank||d.hs==null)&&!RETRIED[a.puuid]){RETRIED[a.puuid]=1;   // the free API sometimes times out: one quiet retry
+      setTimeout(async()=>{const q=await call("rank",a.puuid,a.region);if(q.ok&&q.data&&q.data.source!=="offline"){RANK[a.puuid]=q.data;paintRow(a);if(a.ref===SEL)paintDetail();}},25000);} }));
 }
-function openXAdd(){
-  $("#xf-name").value="";$("#xf-code").value="";$("#xf-tags").value="";$("#xf-err").textContent="";
-  drawX($("#xprev"),null);$("#xmodal").classList.add("show");$("#xf-name").focus();
+async function refreshAccounts(){
+  const [a,m]=await Promise.all([call("accounts"),call("master")]);
+  if(a.ok)ACCOUNTS=a.data; if(m.ok)MASTER=m.data; ACCOUNTS.forEach(paintRow); if(SEL)paintDetail();
 }
-function xPreview(){drawX($("#xprev"),parseX($("#xf-code").value));}
-async function xSave(){
-  const name=$("#xf-name").value.trim(),code=$("#xf-code").value.trim();
-  if(!name){$("#xf-err").textContent="Give it a name.";return;}
-  if(!code||code.indexOf(";")<0){$("#xf-err").textContent="Paste a valid VALORANT crosshair code.";return;}
-  const tags=$("#xf-tags").value.split(",").map(s=>s.trim()).filter(Boolean);
-  const r=await call("crosshair_add",name,code,tags,"");
-  if(!r.ok){$("#xf-err").textContent=r.error||"Could not save that code.";return;}
-  $("#xmodal").classList.remove("show");toast("Crosshair saved.");loadCrosshairs();
-}
-async function loadSettings(){
-  const g=$("#sgrid");g.innerHTML="";
-  if(!ACCOUNTS.length){const r=await call("accounts");if(r.ok)ACCOUNTS=r.data;}
-  const me=ACCOUNTS.find(a=>a.signed_in);
-  if(!me){g.innerHTML='<div class="empty">Sign in to a VALORANT account to see its video settings.</div>';return;}
-  const r=await call("settings",me.ref);const rows=r.ok?r.data:[];
-  const card=document.createElement("div");card.className="scard";
-  card.innerHTML=`<div class="shead"><div class="savatar">${esc((me.saved||me.account||"?").trim()[0].toUpperCase())}</div>
-      <div><div class="sname">${esc(me.saved||("Account "+me.puuid.slice(0,4)))}</div><div class="ssub">current video settings · signed in</div></div></div>
-    <div class="srows">${rows.map(x=>`<div class="srow"><span>${esc(x.name)}</span><b>${esc(x.value)}</b></div>`).join("")||'<div class="empty">No readable video settings in this file.</div>'}</div>
-    <div class="sfoot"><button class="apply" id="s-save">Save these settings</button></div>`;
-  g.appendChild(card);
-  const b=card.querySelector("#s-save");if(b)b.onclick=addAccount;
-}
-function setView(v){
-  document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("active",t.dataset.view===v));
-  ["accounts","settings","crosshairs"].forEach(k=>$("#view-"+k).classList.toggle("hidden",k!==v));
-  if(v==="crosshairs")loadCrosshairs();
-  if(v==="settings")loadSettings();
+async function refresh(){
+  const [a,m,k]=await Promise.all([call("accounts"),call("master"),call("rank_key_status")]);
+  if(!a.ok){$("#list").innerHTML=`<div class="empty">${esc(a.error||"Couldn't read your accounts.")}</div>`;return;}
+  ACCOUNTS=a.data; MASTER=m.ok?m.data:null; KEY=!!(k.ok&&k.data&&k.data.set);
+  $("#rankbar").classList.toggle("hidden",KEY);
+  renderList(); if(!ACCOUNTS.length) return;
+  const keep=store.get("tune.sel"); const first=acc(SEL)||acc(keep)||masterAcc()||ACCOUNTS[0]; SEL=null; select(first.ref);
+  ACCOUNTS.forEach(x=>loadSync(x.ref)); loadRanks();
 }
 
 function boot(){
   if(window.__booted)return; window.__booted=1;
-  document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>setView(t.dataset.view));
-  $("#xf-cancel").onclick=()=>$("#xmodal").classList.remove("show");
-  $("#xmodal").onclick=e=>{if(e.target.id==="xmodal")$("#xmodal").classList.remove("show");};
-  $("#xf-code").addEventListener("input",xPreview);
-  $("#xf-save").onclick=xSave;
-  $("#btn-import").onclick=openImport;
-  $("#if-cancel").onclick=()=>$("#imodal").classList.remove("show");
-  $("#imodal").onclick=e=>{if(e.target.id==="imodal")$("#imodal").classList.remove("show");};
-  $("#if-save").onclick=doImport;
-  $("#rank-connect").onclick=openKey;
-  $("#k-get").onclick=()=>call("open_rank_help");
-  $("#kf-cancel").onclick=()=>$("#kmodal").classList.remove("show");
+  $("#apply").onclick=applyClick; $("#signin").onclick=signIn; $("#restore").onclick=restoreClick; $("#set-main").onclick=setMainClick;
+  $("#c-cancel").onclick=closeBox; $("#c-ok").onclick=()=>{closeBox(); if(onOk)onOk();};
+  $("#modal").onclick=e=>{if(e.target.id==="modal")closeBox();};
+  $("#rank-connect").onclick=openKey; $("#btn-key").onclick=openKey; $("#k-get").onclick=()=>call("open_rank_help");
+  $("#kf-cancel").onclick=()=>$("#kmodal").classList.remove("show"); $("#kf-save").onclick=saveKey;
   $("#kmodal").onclick=e=>{if(e.target.id==="kmodal")$("#kmodal").classList.remove("show");};
-  $("#kf-save").onclick=saveKey;
-  $("#btn-add").onclick=addAccount;
-  $("#btn-switch").onclick=async()=>{const r=await call("launch_riot");
-    toast(r.ok?"Opening Riot Client. Sign in there, then switch back — Tune will see the account.":(r.error||"Couldn't open Riot Client."),!r.ok);};
-  $("#m-cancel").onclick=closeModal; $("#modal").onclick=e=>{if(e.target.id==="modal")closeModal();};
+  $("#btn-refresh").onclick=()=>{RANK={};SYNC={};RETRIED={};refresh();toast("Refreshing…");};
+  addEventListener("keydown",e=>{ if(e.key==="Escape"){closeBox();$("#kmodal").classList.remove("show");}
+    if((e.key==="ArrowDown"||e.key==="ArrowUp")&&SEL&&!document.querySelector(".modal-bg.show")){
+      const i=ACCOUNTS.findIndex(a=>a.ref===SEL),n=ACCOUNTS[(i+(e.key==="ArrowDown"?1:-1)+ACCOUNTS.length)%ACCOUNTS.length];select(n.ref);e.preventDefault();}});
   addEventListener("pointermove",e=>{const s=$(".spot");s.style.setProperty("--x",e.clientX+"px");s.style.setProperty("--y",e.clientY+"px");});
   refresh();
 }
-// Boot the REAL backend as soon as pywebview binds its api. In the real app we NEVER show demo
-// data: we wait for the bridge (it can take a few seconds on a real PC), showing a connecting
-// message, and if it truly never arrives we say so instead of inventing accounts.
-function connecting(msg){ const g=$("#grid"); if(g) g.innerHTML='<div class="empty">'+esc(msg)+'</div>'; }
+// Boot the REAL backend as soon as pywebview binds its api; never fall back to invented accounts.
+function connecting(msg){ const g=$("#list"); if(g) g.innerHTML='<div class="empty">'+esc(msg)+'</div>'; }
 function startup(){
   if(hasApi()||PREVIEW){ boot(); return; }
   connecting("Connecting to Tune…");
@@ -316,7 +211,7 @@ function startup(){
   let n=0;
   const t=setInterval(()=>{
     if(hasApi()){ clearInterval(t); boot(); return; }
-    if(++n>80){ clearInterval(t); if(!window.__booted) connecting("Couldn't reach Tune's engine. Close Tune completely (check the system tray) and reopen it."); }
+    if(++n>80){ clearInterval(t); if(!window.__booted) connecting("Couldn't reach Tune's engine. Close Tune completely and reopen it."); }
   },100);
 }
 startup();

@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 import tune_backend
 
-VERSION='6.8'
+VERSION='6.9'
 
 
 def resource(*parts):
@@ -41,6 +41,11 @@ class Api:
     def apply_to_all(self,profile_path):return self._call(self.be.apply_to_all,profile_path)
     def share_code(self,profile_path):return self._call(self.be.share_code,profile_path)
     def share_import(self,text):return self._call(self.be.share_import,text)
+    def master(self):return self._call(self.be.master)
+    def set_master(self,ref):return self._call(self.be.set_master,ref)
+    def sync_report(self,ref):return self._call(self.be.sync_report,ref)
+    def apply_master(self,ref):return self._call(self.be.apply_master,ref)
+    def restore_backup(self,ref):return self._call(self.be.restore_backup,ref)
     def rank_key_status(self):return self._call(self.be.rank_key_status)
     def set_rank_key(self,key):return self._call(self.be.set_rank_key,key)
     def open_rank_help(self):
@@ -99,7 +104,7 @@ def main():
     import webview   # lazy: only needed to actually open the window
     api=Api(tune_backend.Backend())
     webview.create_window(f'Tune {VERSION}',url=str(resource('webui','index.html')),js_api=api,
-                          width=1000,height=720,min_size=(820,620),background_color='#07070c')
+                          width=1080,height=760,min_size=(820,620),background_color='#07070c')
     webview.start()
 
 

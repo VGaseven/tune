@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import threading
 import time
 import urllib.error
 import urllib.request
@@ -18,9 +19,10 @@ from pathlib import Path
 # Public providers. Henrik serves the live profile/rank; valorant-api serves static card art (no key).
 ACCOUNT_URL='https://api.henrikdev.xyz/valorant/v2/by-puuid/account/{puuid}'
 MMR_URL='https://api.henrikdev.xyz/valorant/v3/by-puuid/mmr/{region}/{platform}/{puuid}'
+MATCHES_URL='https://api.henrikdev.xyz/valorant/v1/by-puuid/stored-matches/{region}/{puuid}?mode=competitive&size=20'
 CARD_ART='https://media.valorant-api.com/playercards/{card}/largeart.png'
-TIER_ICON='https://media.valorant-api.com/competitivetiers/03621f52-342b-cf4e-4f86-9350a49c6d04/{tier}/smallicon.png'
-USER_AGENT='Tune/6.8 (+https://github.com/VGaseven/tune)'
+TIER_ICON='https://media.valorant-api.com/competitivetiers/03621f52-342b-cf4e-4f86-9350a49c6d04/{tier}/largeicon.png'
+USER_AGENT='Tune/6.9 (+https://github.com/VGaseven/tune)'
 REGIONS=('eu','na','ap','kr','latam','br')
 PLATFORM='pc'
 DEFAULT_KEY=''   # deliberately empty in the public repo; a real key is supplied at runtime (resolve_key).
@@ -52,14 +54,31 @@ def card_image_url(card_id):
     return CARD_ART.format(card=card_id) if card_id and CARD_ID.match(str(card_id)) else None
 
 def _offline():
-    return {'name':None,'tag':None,'rank':None,'rr':None,'card_id':None,'card_url':None,
-            'rank_icon':None,'source':'offline'}
+    return {'name':None,'tag':None,'rank':None,'rr':None,'peak':None,'card_id':None,'card_url':None,
+            'rank_icon':None,'wr':None,'wins':None,'games':None,'hs':None,'hs_matches':0,'source':'offline'}
 
-def _http_json(url,headers,timeout=6,max_bytes=1_000_000):
+_PACE=threading.Lock();_LAST=[0.0]
+GAP=2.1   # seconds between calls: keeps a burst of 7 accounts under the free key's 30 requests/minute
+
+def _http_json(url,headers,timeout=15,max_bytes=1_000_000):
     req=urllib.request.Request(url,headers={'User-Agent':USER_AGENT,'Accept':'application/json',**(headers or {})})
-    try:
-        with urllib.request.urlopen(req,timeout=timeout) as r:raw=r.read(max_bytes+1)
-    except (urllib.error.URLError,OSError,ValueError) as e:raise RankError('network') from e
+    for attempt in (0,1):
+        with _PACE:
+            wait=_LAST[0]+GAP-time.monotonic()
+            if wait>0:time.sleep(wait)
+            _LAST[0]=time.monotonic()
+        try:
+            with urllib.request.urlopen(req,timeout=timeout) as r:raw=r.read(max_bytes+1)
+            break
+        except urllib.error.HTTPError as e:
+            if e.code==429 and attempt==0:
+                try:time.sleep(min(30,float(e.headers.get('Retry-After') or 10)))
+                except ValueError:time.sleep(10)
+                continue
+            raise RankError(f'http {e.code}') from e
+        except (urllib.error.URLError,OSError,ValueError) as e:
+            if attempt==0:continue   # the free API is sometimes slow: one quiet retry
+            raise RankError('network') from e
     if len(raw)>max_bytes:raise RankError('too large')
     try:return json.loads(raw.decode('utf-8'))
     except (UnicodeError,json.JSONDecodeError) as e:raise RankError('bad json') from e
@@ -78,11 +97,30 @@ def _norm(account,mmr):
         cur=m.get('current_data') or {};images=cur.get('images') or {}
         rank,rr,tid=cur.get('currenttierpatched'),cur.get('ranking_in_tier'),cur.get('currenttier')
         icon=images.get('small') or images.get('large');peak=None
-    if not icon and isinstance(tid,int) and tid>2:icon=TIER_ICON.format(tier=tid)
+    if not icon and isinstance(tid,int) and (tid==0 or tid>2):icon=TIER_ICON.format(tier=tid)   # 0 = Unrated emblem
     return {'name':a.get('name'),'tag':a.get('tag'),
             'rank':rank,'rr':rr,'peak':peak,
             'card_id':card_id,'card_url':card_image_url(card_id),
             'rank_icon':icon,'source':'online'}
+
+def stats(mmr,matches):
+    """Real numbers only: win rate for the current act (from the rank history) and headshot rate
+    over the last stored competitive matches. None when the data simply isn't there."""
+    out={'wr':None,'wins':None,'games':None,'hs':None,'hs_matches':0}
+    seasonal=((mmr or {}).get('data') or {}).get('seasonal') or []
+    if seasonal and isinstance(seasonal[-1],dict):
+        w,g=seasonal[-1].get('wins'),seasonal[-1].get('games')
+        if isinstance(w,int) and isinstance(g,int) and g>0:out.update(wr=round(100*w/g),wins=w,games=g)
+    head=total=n=0
+    rows=(matches or {}).get('data') if isinstance(matches,dict) else None
+    for m in rows if isinstance(rows,list) else []:
+        if not isinstance(m,dict):continue
+        s=(m.get('stats') or {}).get('shots') or {}
+        try:h,b,l=int(s.get('head',0)),int(s.get('body',0)),int(s.get('leg',0))
+        except (TypeError,ValueError):continue
+        if h+b+l:head+=h;total+=h+b+l;n+=1
+    if total:out.update(hs=round(100*head/total,1),hs_matches=n)
+    return out
 
 def _cache_file(cache_dir,puuid):return Path(cache_dir)/f'{puuid}.json'
 
@@ -114,12 +152,15 @@ def lookup(puuid,region,*,key=None,app_dir=None,cache_dir=None,max_age=21600,fet
     get=fetch or (lambda url:_http_json(url,{'Authorization':key}))
     try:account=get(ACCOUNT_URL.format(puuid=puuid))
     except RankError:return _offline()
-    mmr=None
+    mmr=matches=None
     if region in REGIONS:
         try:mmr=get(MMR_URL.format(region=region,platform=platform,puuid=puuid))
         except RankError:mmr=None
-    data=_norm(account,mmr)
-    if cache_dir:_write_cache(cache_dir,puuid,data)
+        try:matches=get(MATCHES_URL.format(region=region,puuid=puuid))
+        except RankError:matches=None
+    data=_norm(account,mmr);data.update(stats(mmr,matches))
+    complete=region not in REGIONS or (mmr is not None and matches is not None)
+    if cache_dir and complete:_write_cache(cache_dir,puuid,data)   # partial results are retried next time
     return data
 
 def display(data):

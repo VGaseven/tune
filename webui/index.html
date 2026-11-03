@@ -21,92 +21,78 @@
     </svg>
     <div class="brand"><h1>Tune</h1><p id="sub">Your accounts</p></div>
     <div class="spacer"></div>
-    <button class="rbtn" id="btn-add" title="Save the account you're signed into" aria-label="Add account">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
-    <button class="rbtn" id="btn-switch" title="Open Riot Client to switch account" aria-label="Switch account">
+    <button class="rbtn" id="btn-key" title="Rank &amp; stats key" aria-label="Rank and stats key">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/></svg></button>
+    <button class="rbtn" id="btn-refresh" title="Refresh" aria-label="Refresh">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 13-6M20 12a8 8 0 0 1-13 6"/><path d="M17 3v4h-4M7 21v-4h4"/></svg></button>
-    <button class="rbtn" id="btn-import" title="Import a shared preset" aria-label="Import preset">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M8 11l4 4 4-4"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg></button>
   </div>
 
-  <div class="tabs">
-    <button class="tab active" data-view="accounts">Accounts</button>
-    <button class="tab" data-view="settings">Settings</button>
-    <button class="tab" data-view="crosshairs">Crosshairs</button>
-  </div>
+  <div id="rankbar" class="rankbar hidden"><span>Rank, HS% and win rate need a free key. Connect it once for every account.</span><button class="btn primary" id="rank-connect">Connect</button></div>
 
-  <div id="view-accounts" class="view">
-    <div id="rankbar" class="rankbar hidden"><span>Rank and player-cards are off. Connect a free key to turn them on.</span><button class="btn primary" id="rank-connect">Connect rank</button></div>
-    <div class="grid" id="grid"></div>
+  <div class="layout">
+    <section class="col-list">
+      <div class="sec-t">Accounts</div>
+      <div class="list" id="list"></div>
+    </section>
+
+    <section class="col-detail hidden" id="detail">
+      <div class="hero" id="hero">
+        <div class="hero-art" id="hero-art"></div>
+        <div class="hero-body">
+          <div class="hero-id"><span id="d-name">—</span><b id="d-tag"></b><span class="pill main hidden" id="d-main">MAIN</span></div>
+          <div class="hero-rank"><img id="d-emblem" class="emblem lg hidden" alt=""><div><div class="rk" id="d-rank">Unavailable</div><div class="rk-sub" id="d-rksub"></div></div></div>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><div class="s-l">Sensitivity</div><div class="s-v" id="d-sens">—</div><div class="s-n" id="d-sens-n"></div></div>
+        <div class="stat"><div class="s-l">Headshot</div><div class="s-v" id="d-hs">—</div><div class="s-n" id="d-hs-n"></div></div>
+        <div class="stat"><div class="s-l">Win rate</div><div class="s-v" id="d-wr">—</div><div class="s-n" id="d-wr-n"></div></div>
+      </div>
+
+      <div class="panel">
+        <div class="p-head"><div><div class="p-t">Your settings</div><div class="p-s" id="m-from">Shared from your main account</div></div>
+          <button class="link" id="set-main">Make this my main</button></div>
+        <div class="rows" id="m-rows"></div>
+        <div class="sync" id="sync"><span class="sdot"></span><span id="sync-t">Checking…</span></div>
+        <div class="actions">
+          <button class="apply" id="apply">Apply settings
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+          <button class="ibtn" id="signin" title="Sign in — opens Riot Client" aria-label="Sign in">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5M15 12H3"/></svg></button>
+          <div class="spacer"></div>
+          <button class="link hidden" id="restore">Undo last apply</button>
+        </div>
+      </div>
+
+      <div class="panel xh">
+        <canvas id="xcanvas" width="120" height="120" class="xcanvas"></canvas>
+        <div><div class="p-t">Your crosshair</div><div class="p-s" id="x-name">—</div><div class="p-s dim">From your main account — applied together with your settings.</div></div>
+      </div>
+    </section>
   </div>
-  <div id="view-settings" class="view hidden"><div id="sgrid"></div></div>
-  <div id="view-crosshairs" class="view hidden"><div class="grid" id="xgrid"></div></div>
 </div>
 
 <div class="toast" id="toast"></div>
 
 <div class="modal-bg" id="modal">
   <div class="modal">
-    <div class="m-title" id="m-title">Apply to…</div>
-    <div class="m-sub" id="m-sub">Pick the account to copy these settings onto.</div>
-    <div class="m-list" id="m-list"></div>
-    <div class="m-foot"><button class="btn ghost" id="m-cancel">Cancel</button></div>
+    <div class="m-title" id="c-title"></div>
+    <div class="m-sub" id="c-sub"></div>
+    <div class="m-foot"><button class="btn" id="c-cancel">Cancel</button><button class="btn primary" id="c-ok">OK</button></div>
   </div>
 </div>
 
 <div class="modal-bg" id="kmodal">
   <div class="modal">
-    <div class="m-title">Connect rank and player-cards</div>
-    <div class="m-sub">Tune reads rank from the free public HenrikDev API. Grab a key in ~1 minute, paste it once — it's stored only on your PC.</div>
-    <button class="klink" id="k-get">How to get a free key →</button>
+    <div class="m-title">Connect rank and stats</div>
+    <div class="m-sub">Rank, player card, HS% and win rate come from the free HenrikDev API. One key covers every account and is stored only on this PC.</div>
+    <button class="klink" id="k-get">Get a free key →</button>
     <input id="kf-code" placeholder="HDEV-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
     <div class="xerr" id="kf-err"></div>
     <div class="m-foot"><button class="btn" id="kf-cancel">Cancel</button><button class="btn primary" id="kf-save">Save key</button></div>
   </div>
 </div>
-
-<div class="modal-bg" id="imodal">
-  <div class="modal">
-    <div class="m-title">Import a shared preset</div>
-    <div class="m-sub">Paste a preset code a friend sent you. Only video settings are imported — nothing personal.</div>
-    <textarea id="if-code" class="itext" placeholder='{"format":"presetdesk-share", ...}'></textarea>
-    <div class="xerr" id="if-err"></div>
-    <div class="m-foot"><button class="btn" id="if-cancel">Cancel</button><button class="btn primary" id="if-save">Import</button></div>
-  </div>
-</div>
-
-<div class="modal-bg" id="xmodal">
-  <div class="modal">
-    <div class="m-title">Add crosshair</div>
-    <div class="m-sub">Paste a VALORANT crosshair code (Settings › Crosshair › Import profile code).</div>
-    <div class="xform">
-      <canvas id="xprev" width="120" height="120" class="xpreview"></canvas>
-      <div class="xfields">
-        <input id="xf-name" placeholder="Name (e.g. My main)" maxlength="80">
-        <input id="xf-code" placeholder="0;P;c;5;h;0;0l;4;0o;2;0a;1;d;1">
-        <input id="xf-tags" placeholder="Tags, comma separated (optional)">
-        <div class="xerr" id="xf-err"></div>
-      </div>
-    </div>
-    <div class="m-foot"><button class="btn" id="xf-cancel">Cancel</button><button class="btn primary" id="xf-save">Save crosshair</button></div>
-  </div>
-</div>
-
-<template id="card-tpl">
-  <div class="card">
-    <div class="banner">
-      <div class="rr"><div class="num">—</div><div class="lab">RR</div></div>
-      <div class="rank"><span class="dot"></span><span class="rank-t">Unranked</span></div>
-      <div class="me-tag"><i></i> signed in</div>
-    </div>
-    <div class="body">
-      <div class="name"></div>
-      <div class="hints"></div>
-      <div class="foot"><div class="saved"></div><button class="apply">Apply
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button></div>
-    </div>
-  </div>
-</template>
 
 <script src="app.js"></script>
 </body>
