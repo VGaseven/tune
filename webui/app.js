@@ -303,5 +303,15 @@ function boot(){
   addEventListener("pointermove",e=>{const s=$(".spot");s.style.setProperty("--x",e.clientX+"px");s.style.setProperty("--y",e.clientY+"px");});
   refresh();
 }
-if(hasApi())boot(); else window.addEventListener("pywebviewready",boot,{once:true});
-setTimeout(()=>{if(!window.pywebview)boot();},300); // browser-only fallback; never short-circuits the real app
+// Boot the REAL backend as soon as pywebview binds its api. Never fall back to demo data while a
+// pywebview bridge exists - the handshake can take a few seconds on a real PC, so we wait for it.
+function tryBoot(){ if(window.__booted) return true; if(hasApi()){ boot(); return true; } return false; }
+window.addEventListener("pywebviewready",tryBoot,{once:true});
+if(!tryBoot()){
+  let n=0;
+  const t=setInterval(()=>{
+    if(tryBoot()||++n>60){ clearInterval(t);
+      if(!window.__booted && !window.pywebview) boot(); // only here: a plain browser with no bridge (preview)
+    }
+  },120);
+}
