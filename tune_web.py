@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 import tune_backend
 
-VERSION='6.9'
+VERSION='7.0'
 
 
 def resource(*parts):
@@ -43,6 +43,9 @@ class Api:
     def share_import(self,text):return self._call(self.be.share_import,text)
     def master(self):return self._call(self.be.master)
     def set_master(self,ref):return self._call(self.be.set_master,ref)
+    def account_view(self,ref):return self._call(self.be.account_view,ref)
+    def status(self):return self._call(self.be.status)
+    def apply_master_all(self):return self._call(self.be.apply_master_all)
     def sync_report(self,ref):return self._call(self.be.sync_report,ref)
     def apply_master(self,ref):return self._call(self.be.apply_master,ref)
     def restore_backup(self,ref):return self._call(self.be.restore_backup,ref)

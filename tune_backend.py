@@ -22,12 +22,13 @@ RES_X=re.compile(rb'(?mi)^ResolutionSizeX=(\d{2,5})')
 RES_Y=re.compile(rb'(?mi)^ResolutionSizeY=(\d{2,5})')
 
 class Backend:
-    def __init__(self,config_root=None,store_base=None,rank_cache=None,guard=None):
+    def __init__(self,config_root=None,store_base=None,rank_cache=None,guard=None,game_running=None):
         self.config_root=Path(config_root) if config_root is not None else model.config_directory()
         self.store=model.Store(store_base)
         self.crosshairs=desk_crosshair.Library(self.store.base)
         self.rank_cache=Path(rank_cache) if rank_cache is not None else self.store.base/'rank-cache'
         self.guard=guard or model.ensure_closed   # game-closed guard, used only for writes (Apply/Undo)
+        self.game_running=game_running or model.valorant_running   # main-settings sync only blocks the signed-in account
 
     # ---------- reads (safe while the game is open) ----------
     def signed_in(self):
@@ -155,11 +156,44 @@ class Backend:
     def master(self):
         """The shared configuration, read live from the main account's own files."""
         ref=self.master_ref()
-        if not ref:return {'ref':None}
+        return self.account_view(ref) if ref else {'ref':None}
+
+    def account_view(self,ref):
+        """One account's own current configuration (sensitivity, crosshair, video), read live."""
         path=self._path_for_ref(ref);vals=desk_master.values(desk_master.riot_file(path))
+        try:video=self.account_settings(ref)
+        except (OSError,ValueError):video=[]   # VALORANT leaves empty stubs until that account changes a video option
         return {'ref':ref,'account':dp.account_of(path,self.config_root),'game_settings':len(desk_master.shared(vals)),
                 **desk_master.sensitivity(vals),'crosshair':desk_master.crosshair(vals),
-                'video':self.account_settings(ref),'resolution':self._hints(path).get('resolution')}
+                'video':video,'resolution':self._hints(path).get('resolution')}
+
+    def status(self):
+        """Is VALORANT running, and which account is it signed in to (by ref)? Read-only."""
+        try:running=bool(self.game_running())
+        except RuntimeError:running=None
+        signed=self.signed_in();ref=None
+        if signed:
+            for path in self._paths():
+                if path.parent.parent.name.startswith(signed):ref=model.source_id(path);break
+        return {'game_running':running,'signed_in_ref':ref}
+
+    def apply_master_all(self):
+        """Apply the main account's settings to every other account that differs. Accounts that
+        can't be written right now (VALORANT open on them) are skipped and reported, never forced."""
+        mref=self.master_ref()
+        if not mref:raise ValueError('Pick your main account first.')
+        results=[]
+        for path in self._paths():
+            ref=model.source_id(path)
+            if ref==mref:continue
+            acc=dp.account_of(path,self.config_root)
+            try:
+                if self.sync_report(ref).get('in_sync'):results.append({'ref':ref,'account':acc,'status':'same'});continue
+                out=self.apply_master(ref);results.append({'ref':ref,'account':acc,'status':'applied','changed':out['changed'],'video_note':out['video_note']})
+            except Exception as e:
+                results.append({'ref':ref,'account':acc,'status':'skipped','error':str(e)})
+        return {'results':results,'applied':sum(r['status']=='applied' for r in results),
+                'same':sum(r['status']=='same' for r in results),'skipped':sum(r['status']=='skipped' for r in results)}
 
     def _applied(self):
         try:d=model.read_json(self.store.base/'applied.json');return d if isinstance(d,dict) else {}
@@ -185,13 +219,13 @@ class Backend:
     def apply_master(self,ref):
         """Copy the main account's whole configuration (video + game preferences such as
         sensitivity and crosshair) onto another account, then verify it by reading the files back.
-        Requires VALORANT and Riot Client closed. The target is backed up first; the main account
-        is only ever read."""
+        Works while VALORANT is open, except on the account it is signed in to (the game would
+        overwrite it on exit). The target is backed up first; the main account is only ever read."""
         mref=self.master_ref()
         if not mref:raise ValueError('Pick your main account first.')
         if ref==mref:raise ValueError('This is your main account - its settings are the ones being copied.')
         mpath=self._path_for_ref(mref);tpath=self._path_for_ref(ref)
-        self._check_closed()
+        self._check_target(tpath)
         mvals=desk_master.shared(desk_master.values(desk_master.riot_file(mpath)))
         if not mvals:raise ValueError('Your main account has no saved game settings on this PC yet. Play one match on it, then try again.')
         before=desk_master.values(desk_master.riot_file(tpath));changed=desk_master.diff(mvals,before)
@@ -199,8 +233,8 @@ class Backend:
         failed=desk_master.write(desk_master.riot_file(tpath),mvals)
         profile=model.capture(mpath,'Main account',self.config_root,READING);vchanged=0;vfail=[];note=None
         try:
-            raw,delta=model.preview(tpath,profile,self.config_root,self.guard)
-            if delta:model.apply(tpath,profile['settings'],raw,self.store.base/'backups',self.config_root,self.guard)
+            raw,delta=model.preview(tpath,profile,self.config_root,READING)
+            if delta:model.apply(tpath,profile['settings'],raw,self.store.base/'backups',self.config_root,READING)
             vchanged=len(delta);now=model.parse(model.read_bytes(tpath))[2]
             vfail=[k for k,v in profile['settings'].items() if now.get(k)!=v]
         except ValueError as e:
@@ -222,7 +256,7 @@ class Backend:
 
     def restore_backup(self,ref):
         """Put an account's files back exactly as they were before the last Apply."""
-        self._path_for_ref(ref);self._check_closed()
+        self._check_target(self._path_for_ref(ref))
         dest=desk_master.latest_backup(self.store.base/'backups'/'master',ref)
         if not dest:raise ValueError('No backup for this account yet.')
         n=desk_master.restore(dest,ref)
@@ -286,6 +320,17 @@ class Backend:
             try:os.unlink(tmp)
             except OSError:pass
         return {'path':str(saved),'label':data['label'],'n':len(data['settings'])}
+
+    def _check_target(self,path):
+        """Writing another account's files is safe while VALORANT runs - the game only rewrites the
+        account it is signed in to. Refuse just that one (or any, if we can't tell which it is)."""
+        try:running=self.game_running()
+        except RuntimeError:running=True
+        if not running:return
+        signed=self.signed_in()
+        if not signed or Path(path).parent.parent.name.startswith(signed):
+            raise RuntimeError('VALORANT is open on this account, so it would undo the change when it closes. '
+                               'Quit VALORANT first, or apply to a different account.')
 
     def _check_closed(self):
         try:self.guard()

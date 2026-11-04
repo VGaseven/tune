@@ -31,7 +31,7 @@
 
   <div class="layout">
     <section class="col-list">
-      <div class="sec-t">Accounts</div>
+      <div class="sec-row"><div class="sec-t">Accounts</div><button class="link" id="apply-all" title="Copy your main account's settings onto every other account">Apply to all</button></div>
       <div class="list" id="list"></div>
     </section>
 
@@ -51,12 +51,13 @@
       </div>
 
       <div class="panel">
-        <div class="p-head"><div><div class="p-t">Your settings</div><div class="p-s" id="m-from">Shared from your main account</div></div>
+        <div class="p-head"><div><div class="p-t">This account&#39;s settings</div><div class="p-s" id="m-from">—</div></div>
           <button class="link" id="set-main">Make this my main</button></div>
         <div class="rows" id="m-rows"></div>
+        <div class="steps" id="steps"></div>
         <div class="sync" id="sync"><span class="sdot"></span><span id="sync-t">Checking…</span></div>
         <div class="actions">
-          <button class="apply" id="apply">Apply settings
+          <button class="apply" id="apply"><span id="apply-t">Apply settings</span>
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
           <button class="ibtn" id="signin" title="Sign in — opens Riot Client" aria-label="Sign in">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5M15 12H3"/></svg></button>
@@ -67,7 +68,7 @@
 
       <div class="panel xh">
         <canvas id="xcanvas" width="120" height="120" class="xcanvas"></canvas>
-        <div><div class="p-t">Your crosshair</div><div class="p-s" id="x-name">—</div><div class="p-s dim">From your main account — applied together with your settings.</div></div>
+        <div><div class="p-t">This account&#39;s crosshair</div><div class="p-s" id="x-name">—</div><div class="p-s dim">Apply replaces it with your main account&#39;s crosshair.</div></div>
       </div>
     </section>
   </div>

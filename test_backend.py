@@ -23,7 +23,7 @@ class Base(unittest.TestCase):
             p=self.config/f'{uid}-eu'/'Windows'/'GameUserSettings.ini';p.parent.mkdir(parents=True);p.write_bytes(fixture(tex))
         (self.base/'Logs').mkdir()
         (self.base/'Logs'/'ShooterGame.log').write_text(f'LogShooterGameUserSettings: Logged in user changed: {A}\n',encoding='utf-8')
-        self.be=B.Backend(self.config,store_base=self.base/'app',guard=lambda:None)
+        self.be=B.Backend(self.config,store_base=self.base/'app',guard=lambda:None,game_running=lambda:False)
     def file(self,uid):return str(self.config/f'{uid}-eu'/'Windows'/'GameUserSettings.ini')
     def ref(self,uid):return model.source_id(Path(self.file(uid)))
 
@@ -82,10 +82,19 @@ class Master(Base):
         self.be.restore_backup(self.ref(BB));self.assertEqual(self.riot(BB),before)
     def test_refuses_main_as_target_and_when_game_open(self):
         with self.assertRaises(ValueError):self.be.apply_master(self.ref(A))
-        def busy():raise RuntimeError('open')
-        be=B.Backend(self.config,store_base=self.base/'app',guard=busy)
-        with self.assertRaises(RuntimeError):be.apply_master(self.ref(BB))
-        self.assertIn('MouseSensitivity=0.5',self.riot(BB))
+        be=B.Backend(self.config,store_base=self.base/'app',guard=lambda:None,game_running=lambda:True)
+        be.set_master(self.ref(BB))                       # VALORANT open and signed in to A
+        with self.assertRaises(RuntimeError):be.apply_master(self.ref(A))
+        self.assertIn('MouseSensitivity=0.163',self.riot(A))
+    def test_applies_to_other_accounts_while_game_open(self):
+        def boom():raise AssertionError('full game-closed guard must not be used')
+        be=B.Backend(self.config,store_base=self.base/'app',guard=boom,game_running=lambda:True)
+        self.assertTrue(be.apply_master(self.ref(BB))['verified'])   # A is the signed-in one, BB is free
+        self.assertIn('MouseSensitivity=0.163',self.riot(BB))
+        be.restore_backup(self.ref(BB));self.assertIn('MouseSensitivity=0.5',self.riot(BB))
+    def test_account_view_shows_that_accounts_own_values(self):
+        v=self.be.account_view(self.ref(BB));self.assertEqual(v['sens'],0.5)
+        self.assertEqual({r['name']:r['value'] for r in v['video']}['Textures'],'0')
     def test_missing_target_file_is_created_from_main(self):
         Path(self.file(BB)).with_name('RiotUserSettings.ini').unlink()
         self.assertTrue(self.be.apply_master(self.ref(BB))['verified'])
@@ -94,6 +103,21 @@ class Master(Base):
         Path(self.file(BB)).write_bytes(bytes([13,10]))
         out=self.be.apply_master(self.ref(BB));self.assertTrue(out['verified']);self.assertIsNone(out['video_note'])
         self.assertEqual(Path(self.file(BB)).read_bytes(),Path(self.file(A)).read_bytes())
+    def test_view_survives_blank_video_stub(self):
+        Path(self.file(BB)).write_bytes(bytes([13,10]))
+        v=self.be.account_view(self.ref(BB));self.assertEqual(v['video'],[]);self.assertEqual(v['sens'],0.5)
+    def test_status_reports_signed_in_account(self):
+        be=B.Backend(self.config,store_base=self.base/'app',guard=lambda:None,game_running=lambda:True)
+        self.assertEqual(be.status(),{'game_running':True,'signed_in_ref':self.ref(A)})
+    def test_apply_all_skips_signed_in_and_same(self):
+        C='3b6a0d11-1111-4c2c-8d3e-333333333333';p=self.config/f'{C}-eu'/'Windows'/'GameUserSettings.ini'
+        p.parent.mkdir(parents=True);p.write_bytes(fixture(1));p.with_name('RiotUserSettings.ini').write_text(RIOT.format(s='0.9',seen='False',x='c'),encoding='utf-8')
+        be=B.Backend(self.config,store_base=self.base/'app',guard=lambda:None,game_running=lambda:True)
+        be.set_master(self.ref(BB))                    # A is signed in and VALORANT is open
+        out=be.apply_master_all();by={r['ref']:r['status'] for r in out['results']}
+        self.assertEqual(by[self.ref(A)],'skipped');self.assertEqual(by[model.source_id(p)],'applied')
+        self.assertIn('MouseSensitivity=0.5',p.with_name('RiotUserSettings.ini').read_text(encoding='utf-8'))
+        self.assertEqual({r['ref']:r['status'] for r in be.apply_master_all()['results']}[model.source_id(p)],'same')
     def test_master_summary_reads_sens(self):
         m=self.be.master();self.assertEqual(m['sens'],0.163);self.assertEqual(m['game_settings'],2)
 

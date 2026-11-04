@@ -55,6 +55,10 @@ def process_names():
     if len(names)<10:raise RuntimeError('The process list appears restricted. No game files accessed.')
     return names
 
+def valorant_running():
+    """True while the VALORANT game itself is running (Riot Client alone does not count)."""
+    return any(n.lower().startswith('valorant') for n in process_names())
+
 def ensure_closed():
     names=process_names()
     if any(n.lower().startswith(('valorant','riotclient','riot client')) for n in names):
