@@ -239,8 +239,29 @@ async function checkUpdate(quiet){
   const r=await call("check_update");
   if(!r.ok){ if(!quiet) toast("Couldn't check for updates. Are you online?",true); return; }
   const d=r.data||{};
-  if(d.newer){$("#upd-t").textContent=`Tune ${d.latest} is out (you have ${d.current}).`;$("#updbar").classList.remove("hidden");}
-  if(!quiet) toast(d.newer?`Tune ${d.latest} is available.`:`You're on the latest version (${d.current}).`);
+  UPD=d;
+  if(d.newer&&(!quiet||store.get("tune.later")!==d.latest)){$("#upd-t").textContent=`Tune ${d.latest} is out — you have ${d.current}.`;$("#updbar").classList.remove("hidden");}
+  if(!quiet){ if(d.newer){$("#hmodal").classList.remove("show");toast(`Tune ${d.latest} is available — press Update now.`);} else toast(`You're on the latest version (${d.current}).`); }
+}
+let UPD=null, SELFUPD=false;
+function updateClick(){
+  if(!UPD||!UPD.newer) return;
+  if(!SELFUPD){call("open_releases");return;}
+  confirmBox(`Update to Tune ${UPD.latest}?`,"Tune downloads the new version from its GitHub page, checks it isn't damaged, then restarts itself. It takes about a minute. Your accounts, settings and backups stay as they are.",
+    "Update now",async()=>{
+      const r=await call("update_now"); if(!r.ok){toast(r.error||"Couldn't start the update.",true);return;}
+      $("#upd-go").disabled=true; $("#upd-go").textContent="Updating…"; $("#upd-later").classList.add("hidden"); $("#upd-prog").classList.remove("hidden"); pollUpdate();
+    });
+}
+async function pollUpdate(){
+  const r=await call("update_status"), s=r.ok?r.data:{stage:"error",error:"Lost contact with the updater."};
+  if(s.stage==="downloading"){const p=s.total?Math.round(s.got/s.total*100):0;
+    $("#upd-t").textContent=`Downloading Tune ${UPD.latest}… ${p}%`;$("#upd-fill").style.width=Math.max(3,p)+"%";setTimeout(pollUpdate,400);return;}
+  if(s.stage==="installing"){$("#upd-t").textContent="Installing…";setTimeout(pollUpdate,400);return;}
+  if(s.stage==="restarting"){$("#upd-t").textContent=`Installed ✓ Restarting Tune ${UPD.latest}…`;$("#upd-fill").style.width="100%";return;}
+  if(s.stage==="error"){toast(s.error||"The update failed. Nothing was changed.",true);
+    $("#upd-t").textContent=`Tune ${UPD.latest} is out — the update didn't finish.`;$("#upd-go").disabled=false;$("#upd-go").textContent="Try again";
+    $("#upd-later").classList.remove("hidden");$("#upd-prog").classList.add("hidden");}
 }
 async function copyId(){ const a=acc(SEL); if(!a||!RANK[a.puuid]||!RANK[a.puuid].name){toast("Riot ID isn't loaded yet.",true);return;}
   try{await navigator.clipboard.writeText(fullId(a));toast(`Copied ${fullId(a)}`);}catch(e){toast("Couldn't copy.",true);} }
@@ -280,7 +301,9 @@ function boot(){
   if(window.__booted)return; window.__booted=1;
   $("#apply").onclick=applyClick; $("#signin").onclick=signIn; $("#restore").onclick=restoreClick; $("#set-main").onclick=setMainClick; $("#apply-all").onclick=applyAllClick;
   $("#btn-help").onclick=()=>openHelp(false); $("#h-close").onclick=closeHelp; $("#hmodal").onclick=e=>{if(e.target.id==="hmodal")closeHelp();};
-  $("#h-update").onclick=()=>checkUpdate(false); $("#upd-go").onclick=()=>call("open_releases");
+  $("#h-update").onclick=()=>checkUpdate(false); $("#upd-go").onclick=updateClick;
+  $("#upd-later").onclick=()=>{if(UPD)store.set("tune.later",UPD.latest);$("#updbar").classList.add("hidden");};
+  call("can_self_update").then(r=>{SELFUPD=!!(r.ok&&r.data); if(!SELFUPD)$("#upd-go").textContent="Download";});
   $("#h-backups").onclick=async()=>{const r=await call("open_backups"); if(!r.ok)toast(r.error||"Couldn't open the folder.",true);};
   $("#d-id").onclick=copyId; $("#search").oninput=applyFilter;
   call("about").then(r=>{if(r.ok)$("#h-ver").textContent=`Tune ${r.data.version}`;});

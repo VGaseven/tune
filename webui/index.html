@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Doto:wght@500;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="icon" href="icon.png">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -14,10 +15,14 @@
 <div class="wrap">
   <div class="top">
     <svg class="logo" viewBox="0 0 512 512" aria-hidden="true">
-      <rect x="138" y="135" width="236" height="150" rx="46" fill="#F4E3A8" transform="rotate(-5 256 210)"/>
-      <rect x="122" y="193" width="268" height="150" rx="58" fill="#9887E6" transform="rotate(-2 256 268)"/>
-      <g transform="rotate(3 256 330)"><rect x="131" y="255" width="250" height="150" rx="70" fill="#121216"/>
-        <path d="M198 334 L240 376 L330 280" fill="none" stroke="#fff" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/></g>
+      <defs><linearGradient id="lg-bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2c245c"/><stop offset="1" stop-color="#0a0a10"/></linearGradient>
+        <radialGradient id="lg-glow"><stop offset="0" stop-color="#D7F24B" stop-opacity=".3"/><stop offset="1" stop-color="#D7F24B" stop-opacity="0"/></radialGradient></defs>
+      <rect width="512" height="512" rx="118" fill="url(#lg-bg)"/><circle cx="256" cy="256" r="215" fill="url(#lg-glow)"/>
+      <circle cx="256" cy="256" r="171.5" fill="none" stroke="#9887E6" stroke-opacity=".55" stroke-width="17.4"/>
+      <circle cx="256" cy="256" r="171.5" fill="none" stroke="#D7F24B" stroke-width="17.4" stroke-dasharray="808.2 1077.6" transform="rotate(135 256 256)"/>
+      <circle cx="377.3" cy="377.3" r="28" fill="#fff"/>
+      <g fill="#D7F24B"><rect x="242.7" y="153.6" width="26.6" height="64" rx="13.3"/><rect x="242.7" y="294.4" width="26.6" height="64" rx="13.3"/>
+        <rect x="153.6" y="242.7" width="64" height="26.6" rx="13.3"/><rect x="294.4" y="242.7" width="64" height="26.6" rx="13.3"/><circle cx="256" cy="256" r="17.4"/></g>
     </svg>
     <div class="brand"><h1>Tune</h1><p id="sub">Your accounts</p></div>
     <div class="spacer"></div>
@@ -29,7 +34,8 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 13-6M20 12a8 8 0 0 1-13 6"/><path d="M17 3v4h-4M7 21v-4h4"/></svg></button>
   </div>
 
-  <div id="updbar" class="rankbar upd hidden"><span id="upd-t">A new version of Tune is out.</span><button class="btn primary" id="upd-go">Download</button></div>
+  <div id="updbar" class="rankbar upd hidden"><div class="upd-main"><span id="upd-t">A new version of Tune is out.</span><div class="upd-prog hidden" id="upd-prog"><i id="upd-fill"></i></div></div>
+    <div class="upd-btns"><button class="link" id="upd-later">Later</button><button class="btn primary" id="upd-go">Update now</button></div></div>
   <div id="rankbar" class="rankbar hidden"><span>Rank, HS% and win rate need a free key. Connect it once for every account.</span><button class="btn primary" id="rank-connect">Connect</button></div>
 
   <div class="layout">

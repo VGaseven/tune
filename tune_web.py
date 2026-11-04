@@ -9,8 +9,9 @@ import subprocess
 import sys
 from pathlib import Path
 import tune_backend
+import desk_update
 
-VERSION='7.1'
+VERSION='7.2'
 REPO='https://github.com/VGaseven/tune'
 LATEST_API='https://api.github.com/repos/VGaseven/tune/releases/latest'
 
@@ -34,6 +35,7 @@ class Api:
     """The object the web UI calls as window.pywebview.api.* - a thin, defensive wrapper."""
     def __init__(self,backend):
         self.be=backend
+        self._upd={'stage':'idle'}
 
     def _call(self,fn,*a):
         try:return {'ok':True,'data':fn(*a)}
@@ -80,6 +82,26 @@ class Api:
             d=(fetch or get)();tag=d.get('tag_name','')
             return {'current':VERSION,'latest':tag.lstrip('vV') or None,'newer':newer(tag,VERSION),'url':d.get('html_url') or REPO+'/releases'}
         return self._call(go)
+
+    def update_now(self):
+        """Start downloading + installing the latest release in the background; poll update_status."""
+        import threading
+        if self._upd.get('stage') in ('downloading','installing','restarting'):return {'ok':True,'data':self._upd}
+        self._upd={'stage':'downloading','got':0,'total':0}
+        def prog(got,total):self._upd.update(got=got,total=total)
+        def run():
+            try:
+                path=desk_update.update(f'Tune/{VERSION}',progress=prog,newer=lambda tag:newer(tag,VERSION))
+                self._upd={'stage':'restarting'}
+                desk_update.restart(path)
+                import os;threading.Timer(1.2,os._exit,(0,)).start()   # the new Tune is starting; close this one
+            except Exception as e:
+                self._upd={'stage':'error','error':str(e)}
+        threading.Thread(target=run,daemon=True).start()
+        return {'ok':True,'data':self._upd}
+
+    def update_status(self):return {'ok':True,'data':dict(self._upd)}
+    def can_self_update(self):return {'ok':True,'data':bool(getattr(sys,'frozen',False))}
 
     def open_releases(self):
         import webbrowser
@@ -140,6 +162,7 @@ def _selftest():
 def main():
     if '--self-test' in sys.argv or '--selftest' in sys.argv:return _selftest()
     import webview   # lazy: only needed to actually open the window
+    if getattr(sys,'frozen',False):desk_update.cleanup(sys.executable)   # remove the old version after an update
     api=Api(tune_backend.Backend())
     webview.create_window(f'Tune {VERSION}',url=str(resource('webui','index.html')),js_api=api,
                           width=1080,height=760,min_size=(820,620),background_color='#07070c')

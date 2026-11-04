@@ -240,3 +240,9 @@ body{background:var(--bg);color:var(--ink);font-family:Inter,'Segoe UI',system-u
 kbd{display:inline-block;min-width:20px;padding:1px 6px;margin-right:3px;border-radius:6px;background:rgba(255,255,255,.07);border:1px solid var(--stroke2);font:600 11px Inter,sans-serif;color:#e6e6ee;text-align:center}
 .m-foot.spread{justify-content:space-between;align-items:center;flex-wrap:wrap}.m-foot.spread>div:last-child{display:flex;gap:8px;flex-wrap:wrap}
 .about{font-size:12px;color:var(--dim);font-weight:600}
+
+.upd-main{flex:1;min-width:0}
+.upd-btns{display:flex;align-items:center;gap:10px;flex:none}
+.upd-prog{height:4px;margin-top:8px;border-radius:99px;background:rgba(255,255,255,.1);overflow:hidden}
+.upd-prog i{display:block;height:100%;width:3%;border-radius:99px;background:linear-gradient(90deg,#b7a9ff,#9887E6);box-shadow:0 0 10px rgba(152,135,230,.6);transition:width .35s ease}
+.btn.primary:disabled{opacity:.55;cursor:default}

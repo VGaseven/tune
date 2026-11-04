@@ -18,7 +18,7 @@ jobs:
           python-version: '3.12'
 
       - name: Run test suite
-        run: python -m unittest test_capture test_rank test_backend test_web test_crosshair test_reference test_desk -v
+        run: python -m unittest test_capture test_rank test_backend test_web test_crosshair test_reference test_desk test_update -v
 
       - name: Import check
         run: python -c "import tune_web, tune_backend, desk_crosshair, desk_rank, capture_model, desk_app"
@@ -27,7 +27,7 @@ jobs:
         run: pip install -r requirements-build.txt
 
       - name: Build Tune.exe
-        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name Tune --add-data "webui;webui" --collect-all webview tune_web.py
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name Tune --icon assets/tune.ico --add-data "webui;webui" --collect-all webview tune_web.py
 
       - name: Self-test the built EXE (synthetic data only)
         shell: pwsh
@@ -59,7 +59,7 @@ jobs:
       - name: Install build deps
         run: pip install -r requirements-build.txt
       - name: Build Tune.exe
-        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name Tune --add-data "webui;webui" --collect-all webview tune_web.py
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name Tune --icon assets/tune.ico --add-data "webui;webui" --collect-all webview tune_web.py
       - name: Checksum
         shell: pwsh
         run: (Get-FileHash dist/Tune.exe -Algorithm SHA256).Hash > dist/Tune.exe.sha256.txt
