@@ -18,7 +18,7 @@ jobs:
           python-version: '3.12'
 
       - name: Run test suite
-        run: python -m unittest test_capture test_rank test_backend test_web test_crosshair test_reference test_desk test_update -v
+        run: python -m unittest test_capture test_rank test_backend test_web test_crosshair test_reference test_desk test_update test_signin -v
 
       - name: Import check
         run: python -c "import tune_web, tune_backend, desk_crosshair, desk_rank, capture_model, desk_app"

@@ -118,6 +118,25 @@ class Master(Base):
         self.assertEqual(by[self.ref(A)],'skipped');self.assertEqual(by[model.source_id(p)],'applied')
         self.assertIn('MouseSensitivity=0.5',p.with_name('RiotUserSettings.ini').read_text(encoding='utf-8'))
         self.assertEqual({r['ref']:r['status'] for r in be.apply_master_all()['results']}[model.source_id(p)],'same')
+    def test_apply_from_any_account_and_report_against_that_source(self):
+        self.assertIsNone(self.be.sync_report(self.ref(A))['source'])     # nothing applied yet
+        out=self.be.apply_from(self.ref(BB),self.ref(A))
+        self.assertTrue(out['verified']);self.assertEqual(out['from'],self.ref(BB))
+        self.assertIn('MouseSensitivity=0.5',self.riot(A))
+        rep=self.be.sync_report(self.ref(A));self.assertEqual(rep['source'],self.ref(BB));self.assertTrue(rep['in_sync'])
+        with self.assertRaises(ValueError):self.be.apply_from(self.ref(A),self.ref(A))
+    def test_source_without_video_still_copies_game_settings(self):
+        Path(self.file(A)).write_bytes(bytes([13,10]))
+        out=self.be.apply_from(self.ref(A),self.ref(BB))
+        self.assertTrue(out['verified']);self.assertIn('no video settings',out['video_note'])
+        self.assertIn('MouseSensitivity=0.163',self.riot(BB));self.assertIn(b'sg.TextureQuality=0',Path(self.file(BB)).read_bytes())
+    def test_old_applied_file_format_still_reads(self):
+        import json
+        self.be.set_master(self.ref(A));(self.base/'app'/'applied.json').write_text(json.dumps({self.ref(BB):'2026-01-01T00:00:00+00:00'}),encoding='utf-8')
+        rep=self.be.sync_report(self.ref(BB));self.assertEqual(rep['source'],self.ref(A));self.assertEqual(rep['applied_at'],'2026-01-01T00:00:00+00:00')
+    def test_apply_all_from_a_chosen_account(self):
+        out=self.be.apply_all_from(self.ref(BB));self.assertEqual(out['applied'],1)
+        self.assertEqual(self.be.apply_all_from(self.ref(BB))['same'],1)
     def test_master_summary_reads_sens(self):
         m=self.be.master();self.assertEqual(m['sens'],0.163);self.assertEqual(m['game_settings'],2)
 

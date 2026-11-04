@@ -15,14 +15,19 @@ file never changes them behind your back.
 
 - **Save** your current account's video settings as a named profile (works while VALORANT is open — it only reads files).
 - **Apply** a saved profile onto another account, after a clear before/after review.
-- **Switch account**: opens *your* Riot Client so you sign in to another account yourself. Tune then recognises it.
+- **Switch account**: opens *your* Riot Client so you sign in yourself, or, if you turn it on for an account, switches in one click like TcNo Account Switcher (see below).
 - **Share** a profile with a friend as a small file containing only video settings + a name you choose — no account info.
 
 ## What it does **not** do
 
-No passwords, session tokens or login files are read, copied or stored. No game-memory access,
-injection, overlays, input automation, private Riot APIs, auto-login, telemetry or network access.
-Tune never signs in for you and never closes the game for you.
+No passwords are ever read or stored. No game-memory access, injection, overlays, input automation,
+private Riot APIs or telemetry. Tune never closes VALORANT for you.
+
+**One-click switching is opt-in.** Press *Remember sign-in* while VALORANT is open on an account and
+Tune keeps a copy of Riot Client's own "Stay signed in" files for it, encrypted with Windows (DPAPI,
+only readable by your Windows user on this PC). Switching closes Riot Client (never the game), puts
+that copy back and starts Riot Client again. Anyone who could copy those files could sign in as you,
+the same as with TcNo, so keep your PC account safe. *Help → Forget all saved sign-ins* deletes them.
 
 ## Supported settings
 

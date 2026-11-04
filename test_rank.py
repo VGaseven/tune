@@ -67,6 +67,11 @@ class Lookup(unittest.TestCase):
             calls=[]
             R.lookup(PUUID,'eu',key='k',cache_dir=d,fetch=lambda u:calls.append(u) or feed(u))
             self.assertTrue(calls)   # stale cache was ignored
+    def test_force_skips_fresh_cache_and_asks_api_to_reread(self):
+        with tempfile.TemporaryDirectory() as d:
+            R.lookup(PUUID,'eu',key='k',cache_dir=d,fetch=feed);calls=[]
+            out=R.lookup(PUUID,'eu',key='k',cache_dir=d,fetch=lambda u:calls.append(u) or feed(u.split('?')[0]),force=True)
+            self.assertEqual(len(calls),3);self.assertTrue(calls[0].endswith('?force=true'));self.assertEqual(out['source'],'online')
 
 class Stats(unittest.TestCase):
     MMR3={'data':{'current':{'tier':{'id':16,'name':'Platinum 2'},'rr':24},'peak':{'tier':{'name':'Diamond 2'}},

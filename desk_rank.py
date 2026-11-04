@@ -22,7 +22,7 @@ MMR_URL='https://api.henrikdev.xyz/valorant/v3/by-puuid/mmr/{region}/{platform}/
 MATCHES_URL='https://api.henrikdev.xyz/valorant/v1/by-puuid/stored-matches/{region}/{puuid}?mode=competitive&size=20'
 CARD_ART='https://media.valorant-api.com/playercards/{card}/largeart.png'
 TIER_ICON='https://media.valorant-api.com/competitivetiers/03621f52-342b-cf4e-4f86-9350a49c6d04/{tier}/largeicon.png'
-USER_AGENT='Tune/7.2 (+https://github.com/VGaseven/tune)'
+USER_AGENT='Tune/7.3 (+https://github.com/VGaseven/tune)'
 REGIONS=('eu','na','ap','kr','latam','br')
 PLATFORM='pc'
 DEFAULT_KEY=''   # deliberately empty in the public repo; a real key is supplied at runtime (resolve_key).
@@ -138,19 +138,20 @@ def _write_cache(cache_dir,puuid,data):
         _cache_file(cache_dir,puuid).write_text(json.dumps({'at':time.time(),'data':data}),encoding='utf-8')
     except OSError:pass
 
-def lookup(puuid,region,*,key=None,app_dir=None,cache_dir=None,max_age=21600,fetch=None,platform=PLATFORM):
+def lookup(puuid,region,*,key=None,app_dir=None,cache_dir=None,max_age=3600,fetch=None,platform=PLATFORM,force=False):
     """Best-effort public profile for a puuid. Returns a dict with name/tag/rank/rr/card_url/source,
     where source is 'online' (fresh), 'cache' (recent copy) or 'offline' (nothing fetched).
+    force=True skips the local copy and asks the API to re-read the profile (new player card etc.).
     Never raises and never blocks the UI thread's state - callers run it in a worker thread."""
     if not PUUID.match(str(puuid or '')):return _offline()
-    if cache_dir:
+    if cache_dir and not force:
         hit=_read_cache(cache_dir,puuid,max_age)
         if hit:return hit
     key=key if key is not None else resolve_key(app_dir)
     if not key:return _offline()
     region=(region or '').lower()
     get=fetch or (lambda url:_http_json(url,{'Authorization':key}))
-    try:account=get(ACCOUNT_URL.format(puuid=puuid))
+    try:account=get(ACCOUNT_URL.format(puuid=puuid)+('?force=true' if force else ''))
     except RankError:return _offline()
     mmr=matches=None
     if region in REGIONS:

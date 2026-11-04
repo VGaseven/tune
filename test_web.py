@@ -8,7 +8,7 @@ class FakeBackend:
     def __init__(self):self.calls=[]
     def accounts(self):return [{"account":"x"}]
     def profiles(self):return []
-    def rank(self,puuid,region=None):self.calls.append((puuid,region));return {"source":"offline"}
+    def rank(self,puuid,region=None,force=False):self.calls.append((puuid,region));return {"source":"offline"}
     def save(self,path,label):return {"label":label,"replaced":False}
     def apply(self,profile_path,target_path):return {"applied":1}
     def riot_client(self):return None

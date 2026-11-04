@@ -4,8 +4,9 @@ Wraps capture_model (all game-file reads/writes), desk_profiles (the app's own s
 (optional online rank). Imports no tkinter and no pywebview, so it is fully unit-testable and runs
 on CI. Listing and saving use a no-op guard - they only READ, so they work while VALORANT is open;
 applying uses the real game-closed guard. Only settings files are written (the 12 video keys in
-GameUserSettings.ini and the game preferences in RiotUserSettings.ini, via desk_master); no
-credentials, tokens or login files are ever read."""
+GameUserSettings.ini and the game preferences in RiotUserSettings.ini, via desk_master). Passwords
+are never read. Only if the user turns on one-click switching for an account does desk_signin keep
+an encrypted copy of Riot Client's own "Stay signed in" files for it."""
 from __future__ import annotations
 import json
 import re
@@ -15,6 +16,7 @@ import desk_profiles as dp
 import desk_rank
 import desk_crosshair
 import desk_master
+import desk_signin
 
 BLANK=bytes([0xef,0xbb,0xbf,0xff,0xfe,0x20,0x0d,0x0a,0x09,0x00])   # BOMs, whitespace, NULs: an empty video stub
 READING=lambda:None   # read-only operations never require the game to be closed
@@ -22,13 +24,14 @@ RES_X=re.compile(rb'(?mi)^ResolutionSizeX=(\d{2,5})')
 RES_Y=re.compile(rb'(?mi)^ResolutionSizeY=(\d{2,5})')
 
 class Backend:
-    def __init__(self,config_root=None,store_base=None,rank_cache=None,guard=None,game_running=None):
+    def __init__(self,config_root=None,store_base=None,rank_cache=None,guard=None,game_running=None,signins=None):
         self.config_root=Path(config_root) if config_root is not None else model.config_directory()
         self.store=model.Store(store_base)
         self.crosshairs=desk_crosshair.Library(self.store.base)
         self.rank_cache=Path(rank_cache) if rank_cache is not None else self.store.base/'rank-cache'
         self.guard=guard or model.ensure_closed   # game-closed guard, used only for writes (Apply/Undo)
         self.game_running=game_running or model.valorant_running   # main-settings sync only blocks the signed-in account
+        self.signins=signins or desk_signin.SignIns(self.store.base)   # opt-in one-click switching
 
     # ---------- reads (safe while the game is open) ----------
     def signed_in(self):
@@ -106,9 +109,9 @@ class Backend:
             out.append({'key':k,'name':dp.NAMES[k],'value':v})
         return out
 
-    def rank(self,puuid,region=None):
+    def rank(self,puuid,region=None,force=False):
         """Optional public rank/card lookup. Network-bound - the caller runs it off the UI thread."""
-        return desk_rank.lookup(puuid,region,app_dir=self.store.base,cache_dir=self.rank_cache)
+        return desk_rank.lookup(puuid,region,app_dir=self.store.base,cache_dir=self.rank_cache,force=bool(force))
 
     def rank_key_status(self):
         """Whether a rank API key is configured. Never returns the key itself."""
@@ -164,7 +167,7 @@ class Backend:
         try:video=self.account_settings(ref)
         except (OSError,ValueError):video=[]   # VALORANT leaves empty stubs until that account changes a video option
         return {'ref':ref,'account':dp.account_of(path,self.config_root),'game_settings':len(desk_master.shared(vals)),
-                **desk_master.sensitivity(vals),'crosshair':desk_master.crosshair(vals),
+                **desk_master.sensitivity(vals),'crosshair':desk_master.crosshair(vals),'crosshair_code':desk_master.crosshair_code(vals),
                 'video':video,'resolution':self._hints(path).get('resolution')}
 
     def status(self):
@@ -177,82 +180,103 @@ class Backend:
                 if path.parent.parent.name.startswith(signed):ref=model.source_id(path);break
         return {'game_running':running,'signed_in_ref':ref}
 
-    def apply_master_all(self):
-        """Apply the main account's settings to every other account that differs. Accounts that
-        can't be written right now (VALORANT open on them) are skipped and reported, never forced."""
-        mref=self.master_ref()
-        if not mref:raise ValueError('Pick your main account first.')
-        results=[]
+    def apply_all_from(self,source):
+        """Copy one account's settings onto every other account that differs. Accounts that can't
+        be written right now (VALORANT open on them) are skipped and reported, never forced."""
+        self._path_for_ref(source);results=[]
         for path in self._paths():
             ref=model.source_id(path)
-            if ref==mref:continue
+            if ref==source:continue
             acc=dp.account_of(path,self.config_root)
             try:
-                if self.sync_report(ref).get('in_sync'):results.append({'ref':ref,'account':acc,'status':'same'});continue
-                out=self.apply_master(ref);results.append({'ref':ref,'account':acc,'status':'applied','changed':out['changed'],'video_note':out['video_note']})
+                if self.compare(source,ref)['in_sync']:results.append({'ref':ref,'account':acc,'status':'same'});continue
+                out=self.apply_from(source,ref);results.append({'ref':ref,'account':acc,'status':'applied','changed':out['changed'],'video_note':out['video_note']})
             except Exception as e:
                 results.append({'ref':ref,'account':acc,'status':'skipped','error':str(e)})
         return {'results':results,'applied':sum(r['status']=='applied' for r in results),
                 'same':sum(r['status']=='same' for r in results),'skipped':sum(r['status']=='skipped' for r in results)}
 
-    def _applied(self):
-        try:d=model.read_json(self.store.base/'applied.json');return d if isinstance(d,dict) else {}
-        except (OSError,ValueError):return {}
-
-    def sync_report(self,ref):
-        """How closely an account matches the main one right now (re-read from disk). After you
-        play, a mismatch here means Riot restored its cloud copy of those settings."""
+    def apply_master_all(self):
         mref=self.master_ref()
-        if not mref:return {'master':None}
-        if ref==mref:return {'master':True,'in_sync':True,'differ':0}
-        mpath=self._path_for_ref(mref);tpath=self._path_for_ref(ref)
-        mvals=desk_master.values(desk_master.riot_file(mpath));tvals=desk_master.values(desk_master.riot_file(tpath))
-        differ=desk_master.diff(mvals,tvals)
-        mv=model.parse(model.read_bytes(mpath))[2]
+        if not mref:raise ValueError('Pick the account to copy settings from.')
+        return self.apply_all_from(mref)
+
+    def _applied(self):
+        """{target_ref: {'at': iso, 'from': source_ref}} - older files stored just the time."""
+        try:d=model.read_json(self.store.base/'applied.json')
+        except (OSError,ValueError):return {}
+        if not isinstance(d,dict):return {}
+        mref=self.master_ref() if self._master_file().exists() else None
+        return {k:(v if isinstance(v,dict) else {'at':v,'from':mref}) for k,v in d.items()}
+
+    def compare(self,source,target):
+        """How many shared settings differ between two accounts right now (re-read from disk)."""
+        spath=self._path_for_ref(source);tpath=self._path_for_ref(target)
+        svals=desk_master.values(desk_master.riot_file(spath));tvals=desk_master.values(desk_master.riot_file(tpath))
+        differ=desk_master.diff(svals,tvals)
+        try:sv=model.parse(model.read_bytes(spath))[2]
+        except (OSError,ValueError):sv={}
         try:tv=model.parse(model.read_bytes(tpath))[2]
         except (OSError,ValueError):tv={}
-        vdiffer=[k for k,v in mv.items() if tv.get(k)!=v]
-        return {'master':False,'in_sync':not differ and not vdiffer,'differ':len(differ)+len(vdiffer),
-                'total':len(desk_master.shared(mvals))+len(mv),'sens':desk_master.sensitivity(tvals)['sens'],
-                'applied_at':self._applied().get(ref),'has_backup':bool(desk_master.latest_backup(self.store.base/'backups'/'master',ref))}
+        vdiffer=[k for k,v in sv.items() if tv.get(k)!=v]
+        return {'in_sync':not differ and not vdiffer,'differ':len(differ)+len(vdiffer),'total':len(desk_master.shared(svals))+len(sv)}
 
-    def apply_master(self,ref):
-        """Copy the main account's whole configuration (video + game preferences such as
-        sensitivity and crosshair) onto another account, then verify it by reading the files back.
-        Works while VALORANT is open, except on the account it is signed in to (the game would
-        overwrite it on exit). The target is backed up first; the main account is only ever read."""
-        mref=self.master_ref()
-        if not mref:raise ValueError('Pick your main account first.')
-        if ref==mref:raise ValueError('This is your main account - its settings are the ones being copied.')
-        mpath=self._path_for_ref(mref);tpath=self._path_for_ref(ref)
+    def sync_report(self,ref):
+        """Compared with the account whose settings were last applied here. After you play, a
+        mismatch means Riot restored its online copy of those settings."""
+        self._path_for_ref(ref);rec=self._applied().get(ref) or {}
+        out={'source':None,'in_sync':None,'differ':None,'applied_at':rec.get('at'),
+             'has_backup':bool(desk_master.latest_backup(self.store.base/'backups'/'master',ref))}
+        src=rec.get('from')
+        if src and src!=ref:
+            try:out.update(self.compare(src,ref),source=src)
+            except ValueError:pass            # that account is no longer on this PC
+        return out
+
+    def apply_from(self,source,ref):
+        """Copy one account's whole configuration (video + game preferences such as sensitivity
+        and crosshair) onto another, then verify it by reading the files back. Works while
+        VALORANT is open, except on the account it is signed in to (the game would overwrite it on
+        exit). The target is backed up first; the source account is only ever read."""
+        if not source:raise ValueError('Pick the account to copy settings from.')
+        if ref==source:raise ValueError('Pick a different account to copy from.')
+        mpath=self._path_for_ref(source);tpath=self._path_for_ref(ref)
         self._check_target(tpath)
         mvals=desk_master.shared(desk_master.values(desk_master.riot_file(mpath)))
-        if not mvals:raise ValueError('Your main account has no saved game settings on this PC yet. Play one match on it, then try again.')
+        if not mvals:raise ValueError('That account has no saved game settings on this PC yet. Play one match on it, then try again.')
         before=desk_master.values(desk_master.riot_file(tpath));changed=desk_master.diff(mvals,before)
         dest=desk_master.backup([tpath,desk_master.riot_file(tpath)],self.store.base/'backups'/'master',ref)
         failed=desk_master.write(desk_master.riot_file(tpath),mvals)
-        profile=model.capture(mpath,'Main account',self.config_root,READING);vchanged=0;vfail=[];note=None
-        try:
-            raw,delta=model.preview(tpath,profile,self.config_root,READING)
-            if delta:model.apply(tpath,profile['settings'],raw,self.store.base/'backups',self.config_root,READING)
-            vchanged=len(delta);now=model.parse(model.read_bytes(tpath))[2]
-            vfail=[k for k,v in profile['settings'].items() if now.get(k)!=v]
-        except ValueError as e:
-            # An empty/placeholder video file (VALORANT leaves 2-byte stubs) means "no settings yet":
-            # give it the main account's whole video file, then verify. Anything else is left alone.
-            try:blank=len(model.read_bytes(tpath).strip(BLANK))<16
-            except OSError:blank=True
-            if blank:
-                model.atomic(tpath,model.read_bytes(mpath));now=model.parse(model.read_bytes(tpath))[2]
-                vchanged=len(profile['settings']);vfail=[k for k,v in profile['settings'].items() if now.get(k)!=v]
-            else:note=str(e)
+        vchanged=0;vfail=[];note=None;nvideo=0
+        try:profile=model.capture(mpath,'Source account',self.config_root,READING)
+        except ValueError:profile=None;note="the account you copied from has no video settings saved yet, so graphics were left as they are"
+        if profile:
+            nvideo=len(profile['settings'])
+            try:
+                raw,delta=model.preview(tpath,profile,self.config_root,READING)
+                if delta:model.apply(tpath,profile['settings'],raw,self.store.base/'backups',self.config_root,READING)
+                vchanged=len(delta);now=model.parse(model.read_bytes(tpath))[2]
+                vfail=[k for k,v in profile['settings'].items() if now.get(k)!=v]
+            except ValueError as e:
+                # An empty/placeholder video file (VALORANT leaves 2-byte stubs) means "no settings yet":
+                # give it the source account's whole video file, then verify. Anything else is left alone.
+                try:blank=len(model.read_bytes(tpath).strip(BLANK))<16
+                except OSError:blank=True
+                if blank:
+                    model.atomic(tpath,model.read_bytes(mpath));now=model.parse(model.read_bytes(tpath))[2]
+                    vchanged=nvideo;vfail=[k for k,v in profile['settings'].items() if now.get(k)!=v]
+                else:note=str(e);nvideo=0
         if failed or vfail:
             raise RuntimeError(f'Could not verify {len(failed)+len(vfail)} settings after writing. Your backup is in {dest}.')
-        at=model.now();rec=self._applied();rec[ref]=at
+        at=model.now();rec=self._applied();rec[ref]={'at':at,'from':source}
         try:model.write_json(self.store.base/'applied.json',rec)
         except OSError:pass
-        return {'verified':True,'at':at,'game':len(mvals),'video':len(profile['settings']) if not note else 0,
-                'changed':len(changed)+vchanged,'video_note':note,'backup':str(dest)}
+        return {'verified':True,'at':at,'game':len(mvals),'video':nvideo,
+                'changed':len(changed)+vchanged,'video_note':note,'backup':str(dest),'from':source}
+
+    def apply_master(self,ref):
+        """Older name: copy from the remembered main account."""
+        return self.apply_from(self.master_ref(),ref)
 
     def restore_backup(self,ref):
         """Put an account's files back exactly as they were before the last Apply."""
@@ -338,9 +362,36 @@ class Backend:
             raise RuntimeError('Close VALORANT and Riot Client first, then apply again. '
                                'While the game runs it rewrites its own settings on exit.') from None
 
+    # ---------- one-click switching (opt-in, per account) ----------
+    def signin_saved(self):
+        known={model.source_id(p) for p in self._paths()}
+        return {ref:at for ref,at in self.signins.saved().items() if ref in known}
+
+    def remember_signin(self,ref):
+        """Save Riot Client's current sign-in for ref. Only while VALORANT is open on ref, so the
+        copy can't end up under the wrong account."""
+        self._path_for_ref(ref);st=self.status()
+        if not (st['game_running'] and st['signed_in_ref']==ref):
+            raise RuntimeError('Start VALORANT on this account first (sign in with "Stay signed in" ticked), then press Remember sign-in.')
+        return self.signins.remember(ref)
+
+    def keep_signin_fresh(self):
+        st=self.status();ref=st['signed_in_ref']
+        if st['game_running'] and ref and ref in self.signins.saved():return {'refreshed':self.signins.keep_fresh(ref)}
+        return {'refreshed':False}
+
+    def switch_to(self,ref,launch):
+        self._path_for_ref(ref)
+        return self.signins.switch(ref,launch)
+
+    def forget_signins(self,ref=None):
+        return self.signins.forget(ref or None)
+
     # ---------- crosshair code library (local, credential-free) ----------
     def crosshair_list(self):return self.crosshairs.list()
     def crosshair_add(self,name,code,tags=None,notes=''):return self.crosshairs.add(name,code,tags,notes)
     def crosshair_update(self,cid,name=None,code=None,tags=None,notes=None):return self.crosshairs.update(cid,name=name,code=code,tags=tags,notes=notes)
     def crosshair_delete(self,cid):return self.crosshairs.delete(cid)
     def crosshair_parse(self,code):return desk_crosshair.parse_code(code)
+    def crosshair_gallery(self):return desk_crosshair.gallery(self.crosshairs)
+    def crosshair_preview(self,code):return desk_crosshair.preview(code)

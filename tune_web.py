@@ -11,7 +11,7 @@ from pathlib import Path
 import tune_backend
 import desk_update
 
-VERSION='7.2'
+VERSION='7.3'
 REPO='https://github.com/VGaseven/tune'
 LATEST_API='https://api.github.com/repos/VGaseven/tune/releases/latest'
 
@@ -43,13 +43,22 @@ class Api:
 
     def accounts(self):return self._call(self.be.accounts)
     def profiles(self):return self._call(self.be.profiles)
-    def rank(self,puuid,region=None):return self._call(self.be.rank,puuid,region)
+    def rank(self,puuid,region=None,force=False):return self._call(self.be.rank,puuid,region,force)
     def save(self,path,label):return self._call(self.be.save,path,label)
     def apply(self,profile_path,target_path):return self._call(self.be.apply,profile_path,target_path)
     def crosshairs(self):return self._call(self.be.crosshair_list)
     def crosshair_add(self,name,code,tags=None,notes=''):return self._call(self.be.crosshair_add,name,code,tags,notes)
     def crosshair_delete(self,cid):return self._call(self.be.crosshair_delete,cid)
+    def crosshair_update(self,cid,name=None):return self._call(self.be.crosshair_update,cid,name)
     def crosshair_parse(self,code):return self._call(self.be.crosshair_parse,code)
+    def crosshair_gallery(self):return self._call(self.be.crosshair_gallery)
+    def crosshair_preview(self,code):return self._call(self.be.crosshair_preview,code)
+    def open_site(self,url):
+        import webbrowser,desk_crosshair
+        def go():
+            if url not in {u for _,u in desk_crosshair.SITES}:raise ValueError('Unknown site.')
+            return {'opened':webbrowser.open(url)}
+        return self._call(go)
     def settings(self,path):return self._call(self.be.account_settings,path)
     def apply_to_all(self,profile_path):return self._call(self.be.apply_to_all,profile_path)
     def share_code(self,profile_path):return self._call(self.be.share_code,profile_path)
@@ -61,6 +70,8 @@ class Api:
     def apply_master_all(self):return self._call(self.be.apply_master_all)
     def sync_report(self,ref):return self._call(self.be.sync_report,ref)
     def apply_master(self,ref):return self._call(self.be.apply_master,ref)
+    def apply_from(self,source,ref):return self._call(self.be.apply_from,source,ref)
+    def apply_all_from(self,source):return self._call(self.be.apply_all_from,source)
     def restore_backup(self,ref):return self._call(self.be.restore_backup,ref)
     def rank_key_status(self):return self._call(self.be.rank_key_status)
     def set_rank_key(self,key):return self._call(self.be.set_rank_key,key)
@@ -113,12 +124,23 @@ class Api:
             p=self.be.store.base/'backups';p.mkdir(parents=True,exist_ok=True);os.startfile(str(p));return {'opened':True}
         return self._call(go)
 
+    def _launch(self):
+        exe=self.be.riot_client()
+        if not exe:raise RuntimeError('Riot Client was not found. Open it yourself, sign in, then switch back - Tune will recognise the account.')
+        subprocess.Popen([exe,'--launch-product=valorant','--launch-patchline=live'],cwd=str(Path(exe).parent))
+
     def launch_riot(self):
+        def go():self._launch();return {'launched':True}
+        return self._call(go)
+
+    def signin_saved(self):return self._call(self.be.signin_saved)
+    def remember_signin(self,ref):return self._call(self.be.remember_signin,ref)
+    def keep_signin_fresh(self):return self._call(self.be.keep_signin_fresh)
+    def forget_signins(self,ref=None):return self._call(self.be.forget_signins,ref)
+    def switch_to(self,ref):
         def go():
-            exe=self.be.riot_client()
-            if not exe:raise RuntimeError('Riot Client was not found. Open it yourself, sign in, then switch back - Tune will recognise the account.')
-            subprocess.Popen([exe,'--launch-product=valorant','--launch-patchline=live'],cwd=str(Path(exe).parent))
-            return {'launched':True}
+            if not self.be.riot_client():raise RuntimeError('Riot Client was not found on this PC.')
+            return self.be.switch_to(ref,self._launch)
         return self._call(go)
 
 
@@ -163,9 +185,15 @@ def main():
     if '--self-test' in sys.argv or '--selftest' in sys.argv:return _selftest()
     import webview   # lazy: only needed to actually open the window
     if getattr(sys,'frozen',False):desk_update.cleanup(sys.executable)   # remove the old version after an update
-    api=Api(tune_backend.Backend())
-    webview.create_window(f'Tune {VERSION}',url=str(resource('webui','index.html')),js_api=api,
-                          width=1080,height=760,min_size=(820,620),background_color='#07070c')
+    import desk_window,time
+    api=Api(tune_backend.Backend());title=f'Tune {VERSION}'
+    win=webview.create_window(title,url=str(resource('webui','index.html')),js_api=api,
+                              width=1140,height=800,min_size=(380,500),resizable=True,background_color='#07070c')
+    def dark_titlebar():
+        for _ in range(15):                  # the native window can take a moment to get its title
+            if desk_window.darken(title):return
+            time.sleep(0.2)
+    win.events.shown+=dark_titlebar
     webview.start()
 
 

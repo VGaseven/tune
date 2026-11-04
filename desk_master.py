@@ -114,6 +114,43 @@ def sensitivity(vals):
     return {'sens':_f(vals,'MouseSensitivity'),'ads':_f(vals,'MouseSensitivityADS'),
             'scoped':_f(vals,'MouseSensitivityZoomed')}
 
+from desk_crosshair import COLORS as _C
+_PALETTE=[tuple(int(_C[str(i)][k:k+2],16) for k in (1,3,5)) for i in range(8)]
+
+def _primary(vals):
+    raw=vals.get('EAresStringSettingName::SavedCrosshairProfileData')
+    if not raw:return None,None
+    try:
+        data=json.loads(json.loads(raw)) if raw.startswith('"') else json.loads(raw)
+        prof=data['profiles'][int(data.get('currentProfile',0))];return prof,prof['primary']
+    except (ValueError,KeyError,IndexError,TypeError):return None,None
+
+def crosshair_code(vals):
+    """The active profile's primary crosshair as a VALORANT share code (Settings > Crosshair >
+    Import profile code), or None. Every value is written out, so nothing depends on defaults."""
+    prof,p=_primary(vals)
+    if not p:return None
+    f=lambda v:('%g'%round(float(v),3)) if v is not None else '0'
+    b=lambda v:'1' if v else '0'
+    out=['0','P']
+    if p.get('bUseCustomColor'):
+        c=p.get('colorCustom') or {};out+=['c','8','u','%02X%02X%02X%02X'%(c.get('r',255),c.get('g',255),c.get('b',255),c.get('a',255))]
+    else:
+        c=p.get('color') or {};rgb=(c.get('r',255),c.get('g',255),c.get('b',255))
+        idx=min(range(len(_PALETTE)),key=lambda i:sum((x-y)**2 for x,y in zip(_PALETTE[i],rgb)))
+        if sum((x-y)**2 for x,y in zip(_PALETTE[idx],rgb))<=300:out+=['c',str(idx)]
+        else:out+=['c','8','u','%02X%02X%02X%02X'%(*rgb,c.get('a',255))]
+    out+=['h',b(p.get('bHasOutline')),'t',f(p.get('outlineThickness',1)),'o',f(p.get('outlineOpacity',.5)),
+          'd',b(p.get('bDisplayCenterDot')),'z',f(p.get('centerDotSize',2)),'a',f(p.get('centerDotOpacity',1)),
+          'f',b(p.get('bFadeCrosshairWithFiringError'))]
+    for n,key in (('0','innerLines'),('1','outerLines')):
+        l=p.get(key) or {}
+        out+=[n+'b',b(l.get('bShowLines')),n+'t',f(l.get('lineThickness',2)),n+'l',f(l.get('lineLength',4)),
+              n+'v',f(l.get('lineLengthVertical',l.get('lineLength',4))),n+'g',b(l.get('bAllowVertScaling')),
+              n+'o',f(l.get('lineOffset',2)),n+'a',f(l.get('opacity',1)),n+'m',b(l.get('bShowMovementError')),
+              n+'f',b(l.get('bShowShootingError'))]
+    return ';'.join(out)
+
 def crosshair(vals):
     """The active crosshair profile, simplified for the preview, or None."""
     raw=vals.get('EAresStringSettingName::SavedCrosshairProfileData')
