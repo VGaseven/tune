@@ -25,6 +25,13 @@ class Bridge(unittest.TestCase):
             def accounts(self):raise RuntimeError("game is open")
         r=tune_web.Api(Bad()).accounts()
         self.assertFalse(r["ok"]);self.assertIn("game is open",r["error"])
+    def test_update_check_compares_versions(self):
+        self.assertTrue(tune_web.newer('v9.1',tune_web.VERSION));self.assertFalse(tune_web.newer('v1.0',tune_web.VERSION))
+        self.assertFalse(tune_web.newer('nonsense',tune_web.VERSION));self.assertTrue(tune_web.newer('v7.10','7.9'))
+        r=self.api.check_update(fetch=lambda:{'tag_name':'v99.0','html_url':'https://example.invalid/r'})
+        self.assertTrue(r['ok']);self.assertTrue(r['data']['newer']);self.assertEqual(r['data']['latest'],'99.0')
+        def down():raise OSError('offline')
+        self.assertFalse(self.api.check_update(fetch=down)['ok'])
     def test_launch_riot_without_client(self):
         r=self.api.launch_riot()
         self.assertFalse(r["ok"]);self.assertIn("Riot Client",r["error"])

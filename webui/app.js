@@ -40,6 +40,15 @@ const acc=ref=>ACCOUNTS.find(a=>a.ref===ref);
 const masterAcc=()=>ACCOUNTS.find(a=>a.is_master);
 function riotId(a){const r=RANK[a.puuid];return r&&r.name?{name:r.name,tag:r.tag?"#"+r.tag:""}:{name:"Account "+a.puuid.slice(0,4),tag:""};}
 const wide=u=>u?u.replace("largeart.png","wideart.png"):null;
+const RK={iron:"#8d8f94",bronze:"#c08552",silver:"#cfd6de",gold:"#f0c75e",platinum:"#4fd1d9",diamond:"#c99af5",ascendant:"#41d69b",immortal:"#f0577a",radiant:"#ffe8a3"};
+const rankColor=n=>RK[String(n||"").split(" ")[0].toLowerCase()]||"#8a8f99";
+function countUp(el,text){ // animate the numeric part of a stat; plain text if not numeric
+  const m=/^(-?[0-9.]+)(.*)$/.exec(text||""); if(!m||el.dataset.v===text){el.textContent=text;el.dataset.v=text;return;}
+  const to=parseFloat(m[1]),dp=(m[1].split(".")[1]||"").length,from=parseFloat(el.dataset.v)||0,t0=performance.now();el.dataset.v=text;
+  const step=t=>{const k=Math.min(1,(t-t0)/550),e=1-Math.pow(1-k,3);el.textContent=(from+(to-from)*e).toFixed(dp)+m[2];if(k<1&&el.dataset.v===text)requestAnimationFrame(step);else if(el.dataset.v===text)el.textContent=text;};
+  requestAnimationFrame(step);
+}
+const meter=(id,pct,good)=>{const el=$("#"+id);if(!el)return;el.style.width=(pct==null?0:Math.max(2,Math.min(100,pct)))+"%";el.className=good==null?"":good?"good":"low";};
 const inGame=a=>!!(a&&STATUS.game_running&&STATUS.signed_in_ref===a.ref);
 const lastUsed=a=>!!(a&&STATUS.signed_in_ref===a.ref);
 const fullId=a=>{const i=riotId(a);return i.name+i.tag;};
@@ -54,6 +63,13 @@ function renderList(){
   }
   ACCOUNTS.forEach((a,i)=>{const el=document.createElement("div");el.className="acc";el.dataset.ref=a.ref;
     el.style.animationDelay=(i*0.04)+"s";el.onclick=()=>select(a.ref);list.appendChild(el);paintRow(a);});
+  $("#searchbox").classList.toggle("hidden",ACCOUNTS.length<4); applyFilter();
+}
+function applyFilter(){
+  const q=($("#search").value||"").trim().toLowerCase(); let shown=0;
+  ACCOUNTS.forEach(a=>{const el=document.querySelector(`.acc[data-ref="${a.ref}"]`); if(!el) return; const r=RANK[a.puuid]||{};
+    const hit=!q||[fullId(a),r.rank,a.region].some(s=>String(s||"").toLowerCase().includes(q)); el.classList.toggle("hidden",!hit); shown+=hit;});
+  let n=$("#nohit"); if(!shown&&q){ if(!n){n=document.createElement("div");n.id="nohit";n.className="empty";$("#list").appendChild(n);} n.textContent=`No account matches "${q}".`;} else if(n) n.remove();
 }
 function paintRow(a){
   const el=document.querySelector(`.acc[data-ref="${a.ref}"]`); if(!el) return;
@@ -61,7 +77,7 @@ function paintRow(a){
   const msens=MASTER&&MASTER.sens, same=a.is_master||(a.sens!=null&&msens!=null&&Math.abs(a.sens-msens)<1e-4);
   const dot=a.is_master?"ok":s?(s.in_sync?"ok":"warn"):"";
   el.classList.toggle("sel",a.ref===SEL);
-  el.style.setProperty("--art",r&&r.card_url?`url("${wide(r.card_url)}")`:"none");
+  el.style.setProperty("--art",r&&r.card_url?`url("${wide(r.card_url)}")`:"none"); el.style.setProperty("--rk",rankColor(r&&r.rank));
   const loading=KEY&&!r;
   el.innerHTML=`<div class="who"><div class="nm">${esc(id.name)}<b>${esc(id.tag)}</b>${a.is_master?'<span class="pill main">MAIN</span>':""}${inGame(a)?'<span class="pill live">IN GAME</span>':lastUsed(a)?'<span class="pill last">LAST USED</span>':""}</div>
       <div class="mini"><span title="${same?"Matches your main":"Differs from your main"}"><span class="sdot ${dot}" style="display:inline-block;margin-right:5px"></span>Sens <b>${esc(fmtSens(a.sens)??"—")}</b></span>
@@ -77,7 +93,7 @@ function select(ref){
   if(changed){d.classList.remove("swap");void d.offsetWidth;d.classList.add("swap");$("#signin").classList.remove("ready");}
   paintDetail(); loadSync(ref); loadView(ref);
 }
-function stat(id,value,note){const v=$("#"+id);v.textContent=value??"Unavailable";v.classList.toggle("na",value==null);$("#"+id+"-n").textContent=note||"";}
+function stat(id,value,note){const v=$("#"+id);if(value==null){v.textContent="Unavailable";v.dataset.v="";}else countUp(v,value);v.classList.toggle("na",value==null);$("#"+id+"-n").textContent=note||"";}
 function paintDetail(){
   const a=acc(SEL); if(!a) return; const r=RANK[a.puuid]||{}, id=riotId(a);
   $("#d-name").textContent=id.name; $("#d-tag").textContent=id.tag; $("#d-main").classList.toggle("hidden",!a.is_master);
@@ -86,11 +102,15 @@ function paintDetail(){
   const sub=[r.rr!=null&&r.rank&&r.rank!=="Unrated"?r.rr+" RR":null,r.peak?"Peak "+r.peak:null].filter(Boolean).join(" · ");
   $("#d-rksub").textContent=sub||(!KEY?"Connect the free key to see rank":"");
   const em=$("#d-emblem"); if(r.rank_icon){em.src=r.rank_icon;em.classList.remove("hidden");}else em.classList.add("hidden");
+  $("#hero").style.setProperty("--rk",rankColor(r.rank));
+  const hasRR=r.rr!=null&&r.rank&&r.rank!=="Unrated"; $("#d-rrbar").classList.toggle("hidden",!hasRR); if(hasRR)$("#d-rrfill").style.width=Math.min(100,Math.max(3,r.rr))+"%";
   const v=VIEW[a.ref], ms=MASTER&&MASTER.sens, mine=v?v.sens:a.sens;
   const diff=!a.is_master&&mine!=null&&ms!=null&&Math.abs(mine-ms)>1e-4;
   stat("d-sens",fmtSens(mine),mine==null?"No saved sensitivity on this PC":diff?`main uses ${fmtSens(ms)}`:(v&&v.ads!=null?`ADS ${fmtSens(v.ads)}`:""));
   stat("d-hs",r.hs!=null?r.hs+"%":null,r.hs!=null?`last ${r.hs_matches} competitive match${r.hs_matches===1?"":"es"}`:"");
   stat("d-wr",r.wr!=null?r.wr+"%":null,r.wr!=null?`${r.wins}W · ${r.games} games this act`:"");
+  meter("d-hs-m",r.hs!=null?r.hs*2:null,r.hs!=null?r.hs>=25:null); meter("d-wr-m",r.wr,r.wr!=null?r.wr>=50:null);
+
   paintMaster(a); paintSync(a);
 }
 function paintMaster(a){
@@ -102,9 +122,11 @@ function paintMaster(a){
   const mv={}; (m&&m.video||[]).forEach(x=>mv[x.key]=x.value);
   const keep=(v.video||[]).filter(x=>x.key!=="bUseVSync"&&x.key!=="FrameRateLimit");
   const cmp=!a.is_master&&m&&m.ref;
-  rows.innerHTML=[["Sensitivity",fmtSens(v.sens),1,cmp&&fmtSens(m.sens)],["Scoped / ADS",fmtSens(v.ads),1,cmp&&fmtSens(m.ads)],
-    ["Resolution",v.resolution,0,cmp&&m.resolution],...keep.map(x=>[x.name,x.value,0,cmp&&mv[x.key]]),...(keep.length?[]:[["Video settings","Not saved yet"]]),["Game settings",`${v.game_settings} saved`]]
-    .map(([k,val,key,main])=>{const d=main!=null&&main!==false&&String(main)!==String(val??"");
+  const G=t=>[`<div class="grp">${t}</div>`];
+  rows.innerHTML=[G("Aim"),["Sensitivity",fmtSens(v.sens),1,cmp&&fmtSens(m.sens)],["Scoped / ADS",fmtSens(v.ads),1,cmp&&fmtSens(m.ads)],
+    G("Display &amp; graphics"),["Resolution",v.resolution,0,cmp&&m.resolution],...keep.map(x=>[x.name,x.value,0,cmp&&mv[x.key]]),...(keep.length?[]:[["Video settings","Not saved yet"]]),
+    G("Everything else"),["Game settings",`${v.game_settings} saved`,0]]
+    .map(([k,val,key,main])=>{ if(val===undefined&&key===undefined) return k;const d=main!=null&&main!==false&&String(main)!==String(val??"");
       return `<div class="row${key?" key":""}${d?" diff":""}"><span>${esc(k)}</span><b>${esc(val??"Not saved")}${d?`<i>main ${esc(main)}</i>`:""}</b></div>`;}).join("");
   $("#x-name").textContent=v.crosshair?v.crosshair.name:"No crosshair saved on this PC"; drawX(v.crosshair);
 }
@@ -135,11 +157,15 @@ async function loadSync(ref){
   const r=await call("sync_report",ref); if(r.ok){SYNC[ref]=r.data; const a=acc(ref); if(a){paintRow(a); if(ref===SEL)paintSync(a);}}
 }
 
-/* ---------------- crosshair preview (from the main account's active profile) ---------------- */
+/* ---------------- crosshair preview (the selected account's active profile) ---------------- */
+const XBG={range:[[0,"#6b7480"],[.55,"#4a525c"],[.56,"#3a3f46"],[1,"#2a2e34"]],sky:[[0,"#9fc7e8"],[.6,"#d9ecf7"],[.61,"#b9a98f"],[1,"#8c7c63"]],
+  sand:[[0,"#e9d3a6"],[1,"#b88c55"]],dark:[[0,"#15171c"],[1,"#0b0c0f"]]};
+let XB=store.get("tune.xbg")||"range", XLAST=null;
 function drawX(x){
   const cv=$("#xcanvas"),ctx=cv.getContext("2d"),W=cv.width,H=cv.height,cx=Math.round(W/2),cy=Math.round(H/2),u=4;
-  const g=ctx.createLinearGradient(0,0,0,H);g.addColorStop(0,"#5b6470");g.addColorStop(1,"#2a2f36");
-  ctx.fillStyle=g;ctx.fillRect(0,0,W,H); if(!x) return;
+  XLAST=x; const b=XBG[XB]||XBG.range, g=ctx.createLinearGradient(0,0,0,H);
+  b.forEach(([o,c])=>g.addColorStop(o,c)); ctx.globalAlpha=1; ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+  if(!x){ctx.fillStyle="rgba(255,255,255,.35)";ctx.font="600 11px Inter,sans-serif";ctx.textAlign="center";ctx.fillText("No crosshair",cx,cy+4);return;}
   const ot=x.outline?Math.max(1,x.outline_thickness)*u:0;
   // the outline has its own opacity: a line at 0% with a full outline is VALORANT's "black crosshair"
   const box=(x0,y0,w,h,alpha)=>{ if(ot){ctx.globalAlpha=x.outline_opacity;ctx.fillStyle="#000";ctx.fillRect(x0-ot,y0-ot,w+2*ot,h+2*ot);}
@@ -202,6 +228,23 @@ async function loadStatus(){
   if(JSON.stringify(STATUS)!==old){ACCOUNTS.forEach(paintRow); const a=acc(SEL); if(a){paintSync(a); loadSync(a.ref);}}
 }
 
+/* ---------------- help, about, updates ---------------- */
+function openHelp(welcome){
+  $("#h-title").textContent=welcome?"Welcome to Tune 👋":"Help & about";
+  $("#h-sub").textContent=welcome?"Set up all your accounts with your main account's settings in three steps.":"Tune copies your main account's settings onto your other accounts.";
+  $("#hmodal").classList.add("show");
+}
+const closeHelp=()=>{$("#hmodal").classList.remove("show");store.set("tune.welcomed","1");};
+async function checkUpdate(quiet){
+  const r=await call("check_update");
+  if(!r.ok){ if(!quiet) toast("Couldn't check for updates. Are you online?",true); return; }
+  const d=r.data||{};
+  if(d.newer){$("#upd-t").textContent=`Tune ${d.latest} is out (you have ${d.current}).`;$("#updbar").classList.remove("hidden");}
+  if(!quiet) toast(d.newer?`Tune ${d.latest} is available.`:`You're on the latest version (${d.current}).`);
+}
+async function copyId(){ const a=acc(SEL); if(!a||!RANK[a.puuid]||!RANK[a.puuid].name){toast("Riot ID isn't loaded yet.",true);return;}
+  try{await navigator.clipboard.writeText(fullId(a));toast(`Copied ${fullId(a)}`);}catch(e){toast("Couldn't copy.",true);} }
+
 /* ---------------- rank key ---------------- */
 function openKey(){$("#kf-code").value="";$("#kf-err").textContent="";$("#kmodal").classList.add("show");$("#kf-code").focus();}
 async function saveKey(){
@@ -236,15 +279,28 @@ async function refresh(){
 function boot(){
   if(window.__booted)return; window.__booted=1;
   $("#apply").onclick=applyClick; $("#signin").onclick=signIn; $("#restore").onclick=restoreClick; $("#set-main").onclick=setMainClick; $("#apply-all").onclick=applyAllClick;
+  $("#btn-help").onclick=()=>openHelp(false); $("#h-close").onclick=closeHelp; $("#hmodal").onclick=e=>{if(e.target.id==="hmodal")closeHelp();};
+  $("#h-update").onclick=()=>checkUpdate(false); $("#upd-go").onclick=()=>call("open_releases");
+  $("#h-backups").onclick=async()=>{const r=await call("open_backups"); if(!r.ok)toast(r.error||"Couldn't open the folder.",true);};
+  $("#d-id").onclick=copyId; $("#search").oninput=applyFilter;
+  call("about").then(r=>{if(r.ok)$("#h-ver").textContent=`Tune ${r.data.version}`;});
+  if(!store.get("tune.welcomed")) setTimeout(()=>openHelp(true),600);
+  setTimeout(()=>checkUpdate(true),3000);
+  document.querySelectorAll("#xbgs button").forEach(b=>{b.classList.toggle("on",b.dataset.bg===XB);
+    b.onclick=()=>{XB=b.dataset.bg;store.set("tune.xbg",XB);document.querySelectorAll("#xbgs button").forEach(o=>o.classList.toggle("on",o===b));drawX(XLAST);};});
   $("#c-cancel").onclick=closeBox; $("#c-ok").onclick=()=>{closeBox(); if(onOk)onOk();};
   $("#modal").onclick=e=>{if(e.target.id==="modal")closeBox();};
   $("#rank-connect").onclick=openKey; $("#btn-key").onclick=openKey; $("#k-get").onclick=()=>call("open_rank_help");
   $("#kf-cancel").onclick=()=>$("#kmodal").classList.remove("show"); $("#kf-save").onclick=saveKey;
   $("#kmodal").onclick=e=>{if(e.target.id==="kmodal")$("#kmodal").classList.remove("show");};
   $("#btn-refresh").onclick=()=>{RANK={};SYNC={};RETRIED={};refresh();toast("Refreshing…");};
-  addEventListener("keydown",e=>{ if(e.key==="Escape"){closeBox();$("#kmodal").classList.remove("show");}
+  addEventListener("keydown",e=>{ if(e.key==="Escape"){closeBox();$("#kmodal").classList.remove("show");if($("#hmodal").classList.contains("show"))closeHelp();if(document.activeElement===$("#search")){$("#search").value="";applyFilter();$("#search").blur();}}
+    const typing=/INPUT|TEXTAREA/.test((document.activeElement||{}).tagName||""), open=document.querySelector(".modal-bg.show");
+    if(!typing&&!open&&e.key==="/"){e.preventDefault();$("#search").focus();}
+    if(!typing&&!open&&(e.key==="h"||e.key==="H"||e.key==="?")){openHelp(false);}
+    if(!typing&&!open&&e.key==="Enter"&&!$("#apply").disabled){applyClick();}
     if((e.key==="ArrowDown"||e.key==="ArrowUp")&&SEL&&!document.querySelector(".modal-bg.show")){
-      const i=ACCOUNTS.findIndex(a=>a.ref===SEL),n=ACCOUNTS[(i+(e.key==="ArrowDown"?1:-1)+ACCOUNTS.length)%ACCOUNTS.length];select(n.ref);e.preventDefault();}});
+      const vis=ACCOUNTS.filter(a=>{const el=document.querySelector(`.acc[data-ref="${a.ref}"]`);return el&&!el.classList.contains("hidden");}); if(vis.length){const i=vis.findIndex(a=>a.ref===SEL),n=vis[(i+(e.key==="ArrowDown"?1:-1)+vis.length)%vis.length];select(n.ref);} e.preventDefault();}});
   addEventListener("pointermove",e=>{const s=$(".spot");s.style.setProperty("--x",e.clientX+"px");s.style.setProperty("--y",e.clientY+"px");});
   refresh(); setInterval(()=>{if(!document.hidden)loadStatus();},15000);
 }

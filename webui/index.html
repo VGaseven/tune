@@ -21,16 +21,20 @@
     </svg>
     <div class="brand"><h1>Tune</h1><p id="sub">Your accounts</p></div>
     <div class="spacer"></div>
+    <button class="rbtn" id="btn-help" title="Help &amp; about (H)" aria-label="Help and about">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6"/><path d="M12 17.2h.01"/></svg></button>
     <button class="rbtn" id="btn-key" title="Rank &amp; stats key" aria-label="Rank and stats key">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/></svg></button>
     <button class="rbtn" id="btn-refresh" title="Refresh" aria-label="Refresh">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 0 1 13-6M20 12a8 8 0 0 1-13 6"/><path d="M17 3v4h-4M7 21v-4h4"/></svg></button>
   </div>
 
+  <div id="updbar" class="rankbar upd hidden"><span id="upd-t">A new version of Tune is out.</span><button class="btn primary" id="upd-go">Download</button></div>
   <div id="rankbar" class="rankbar hidden"><span>Rank, HS% and win rate need a free key. Connect it once for every account.</span><button class="btn primary" id="rank-connect">Connect</button></div>
 
   <div class="layout">
     <section class="col-list">
+      <div class="search hidden" id="searchbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="search" placeholder="Search accounts  ( / )" autocomplete="off" spellcheck="false"></div>
       <div class="sec-row"><div class="sec-t">Accounts</div><button class="link" id="apply-all" title="Copy your main account's settings onto every other account">Apply to all</button></div>
       <div class="list" id="list"></div>
     </section>
@@ -39,15 +43,15 @@
       <div class="hero" id="hero">
         <div class="hero-art" id="hero-art"></div>
         <div class="hero-body">
-          <div class="hero-id"><span id="d-name">—</span><b id="d-tag"></b><span class="pill main hidden" id="d-main">MAIN</span></div>
-          <div class="hero-rank"><img id="d-emblem" class="emblem lg hidden" alt=""><div><div class="rk" id="d-rank">Unavailable</div><div class="rk-sub" id="d-rksub"></div></div></div>
+          <div class="hero-id" id="d-id" title="Click to copy Riot ID"><span id="d-name">—</span><b id="d-tag"></b><svg class="copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg><span class="pill main hidden" id="d-main">MAIN</span></div>
+          <div class="hero-rank"><img id="d-emblem" class="emblem lg hidden" alt=""><div><div class="rk" id="d-rank">Unavailable</div><div class="rk-sub" id="d-rksub"></div><div class="rrbar hidden" id="d-rrbar"><i id="d-rrfill"></i></div></div></div>
         </div>
       </div>
 
       <div class="stats">
         <div class="stat"><div class="s-l">Sensitivity</div><div class="s-v" id="d-sens">—</div><div class="s-n" id="d-sens-n"></div></div>
-        <div class="stat"><div class="s-l">Headshot</div><div class="s-v" id="d-hs">—</div><div class="s-n" id="d-hs-n"></div></div>
-        <div class="stat"><div class="s-l">Win rate</div><div class="s-v" id="d-wr">—</div><div class="s-n" id="d-wr-n"></div></div>
+        <div class="stat"><div class="s-l">Headshot</div><div class="s-v" id="d-hs">—</div><div class="meter"><i id="d-hs-m"></i></div><div class="s-n" id="d-hs-n"></div></div>
+        <div class="stat"><div class="s-l">Win rate</div><div class="s-v" id="d-wr">—</div><div class="meter mid"><i id="d-wr-m"></i></div><div class="s-n" id="d-wr-n"></div></div>
       </div>
 
       <div class="panel">
@@ -67,8 +71,8 @@
       </div>
 
       <div class="panel xh">
-        <canvas id="xcanvas" width="120" height="120" class="xcanvas"></canvas>
-        <div><div class="p-t">This account&#39;s crosshair</div><div class="p-s" id="x-name">—</div><div class="p-s dim">Apply replaces it with your main account&#39;s crosshair.</div></div>
+        <canvas id="xcanvas" width="150" height="150" class="xcanvas"></canvas>
+        <div><div class="p-t">This account&#39;s crosshair</div><div class="p-s" id="x-name">—</div><div class="p-s dim">Apply replaces it with your main account&#39;s crosshair.</div><div class="xbgs" id="xbgs"><button data-bg="range">Range</button><button data-bg="sky">Sky</button><button data-bg="sand">Sand</button><button data-bg="dark">Dark</button></div></div>
       </div>
     </section>
   </div>
@@ -92,6 +96,28 @@
     <input id="kf-code" placeholder="HDEV-xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
     <div class="xerr" id="kf-err"></div>
     <div class="m-foot"><button class="btn" id="kf-cancel">Cancel</button><button class="btn primary" id="kf-save">Save key</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="hmodal">
+  <div class="modal wide">
+    <div class="m-title" id="h-title">Help &amp; about</div>
+    <div class="m-sub" id="h-sub">Tune copies your main account's settings onto your other accounts.</div>
+    <div class="howto">
+      <div><span>1</span><b>Pick an account</b><p>Choose it on the left. You'll see its own settings, with your main's value next to anything that's different.</p></div>
+      <div><span>2</span><b>Apply settings</b><p>Copies your main's sensitivity, crosshair and graphics. It's backed up first, so you can always undo.</p></div>
+      <div><span>3</span><b>Sign in &amp; play</b><p>Riot Client opens. Sign out there and sign in to that account, then play.</p></div>
+    </div>
+    <div class="faq">
+      <details><summary>Why doesn't Sign in log me into the account automatically?</summary><p>Signing in for you would mean handling your password or copying Riot's login files. Tune never does either, to keep your accounts safe. Switch accounts in Riot Client: profile menu, Sign out, then sign in.</p></details>
+      <details><summary>My settings changed back after I signed in. Why?</summary><p>Riot keeps an online copy of sensitivity and crosshair and may restore it when you sign in. Tune checks again and marks the account as changed. Press Apply again with VALORANT closed or on another account.</p></details>
+      <details><summary>Do I need to close VALORANT?</summary><p>No. Only the account VALORANT is currently signed in to can't be changed, because the game would overwrite it when it closes. Its card shows IN GAME.</p></details>
+      <details><summary>Is it safe for my account?</summary><p>Tune only edits VALORANT's own settings files on this PC, the same ones the game's settings menu writes. It doesn't touch the game while it runs, read your password, or use any login data. It can't promise anything on Riot's behalf.</p></details>
+      <details><summary>How do I undo?</summary><p>Select the account and press "Undo last apply". Every apply makes a backup first. You can also open the backups folder below.</p></details>
+    </div>
+    <div class="keys"><span><kbd>↑</kbd><kbd>↓</kbd> switch account</span><span><kbd>/</kbd> search</span><span><kbd>Enter</kbd> apply</span><span><kbd>H</kbd> help</span><span><kbd>Esc</kbd> close</span></div>
+    <div class="m-foot spread"><div class="about" id="h-ver">Tune</div>
+      <div><button class="btn" id="h-backups">Open backups folder</button><button class="btn" id="h-update">Check for updates</button><button class="btn primary" id="h-close">Got it</button></div></div>
   </div>
 </div>
 

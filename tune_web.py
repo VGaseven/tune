@@ -10,7 +10,18 @@ import sys
 from pathlib import Path
 import tune_backend
 
-VERSION='7.0'
+VERSION='7.1'
+REPO='https://github.com/VGaseven/tune'
+LATEST_API='https://api.github.com/repos/VGaseven/tune/releases/latest'
+
+
+def newer(latest,current):
+    """True when a release tag like 'v7.2' is newer than the running version '7.0'."""
+    def parts(v):
+        try:return tuple(int(x) for x in str(v).lstrip('vV').split('.'))
+        except ValueError:return ()
+    a,b=parts(latest),parts(current)
+    return bool(a) and bool(b) and a>b
 
 
 def resource(*parts):
@@ -54,6 +65,30 @@ class Api:
     def open_rank_help(self):
         import webbrowser
         def go():webbrowser.open('https://api.henrikdev.xyz/dashboard/');return {'opened':True}
+        return self._call(go)
+
+    def about(self):
+        return self._call(lambda:{'version':VERSION,'repo':REPO,'backups':str(self.be.store.base/'backups')})
+
+    def check_update(self,fetch=None):
+        """Ask GitHub (public, no account data sent) whether a newer Tune release exists."""
+        def go():
+            import json,urllib.request
+            def get():
+                req=urllib.request.Request(LATEST_API,headers={'User-Agent':f'Tune/{VERSION}','Accept':'application/vnd.github+json'})
+                with urllib.request.urlopen(req,timeout=8) as r:return json.loads(r.read().decode('utf-8'))
+            d=(fetch or get)();tag=d.get('tag_name','')
+            return {'current':VERSION,'latest':tag.lstrip('vV') or None,'newer':newer(tag,VERSION),'url':d.get('html_url') or REPO+'/releases'}
+        return self._call(go)
+
+    def open_releases(self):
+        import webbrowser
+        return self._call(lambda:{'opened':webbrowser.open(REPO+'/releases/latest')})
+
+    def open_backups(self):
+        def go():
+            import os
+            p=self.be.store.base/'backups';p.mkdir(parents=True,exist_ok=True);os.startfile(str(p));return {'opened':True}
         return self._call(go)
 
     def launch_riot(self):
