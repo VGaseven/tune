@@ -71,6 +71,13 @@ class SignIns(Base):
         payload={'format':S.FORMAT,'v':1,'files':{'RiotGamesPrivateSettings.yaml':b'tdid: old\n'.hex(),'Cookies/Cookies':b'c-old'.hex()}}
         self.s.dir.mkdir(parents=True);(self.s.dir/f'{A}.bin').write_bytes(json.dumps(payload).encode()[::-1])
         self.sign('bob');self.s.switch(A,self.f.launch);self.assertEqual(self.state()['yaml'],'tdid: old\n')
+    def test_switch_keeps_the_unsaved_current_signin_and_can_go_back(self):
+        self.sign('alice');self.s.remember(A);self.sign('never-saved')
+        self.s.switch(A,self.f.launch);self.assertEqual(self.state()['yaml'],'tdid: alice\n')
+        self.assertTrue(self.s.has_previous())
+        self.s.undo_switch(self.f.launch);self.assertEqual(self.state()['yaml'],'tdid: never-saved\n')
+        self.s.forget();self.assertFalse(self.s.has_previous())
+        with self.assertRaises(ValueError):self.s.undo_switch(self.f.launch)
     def test_bad_ref_rejected(self):
         with self.assertRaises(ValueError):self.s.remember('../../evil')
 

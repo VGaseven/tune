@@ -149,6 +149,7 @@ function paintSync(a){
   box.className="sync"; ap.disabled=blocked||ACCOUNTS.length<2; rs.classList.toggle("hidden",!(s&&s.has_backup));
   $("#apply-t").textContent=blocked?"Quit VALORANT to apply":"Apply settings…";
   const rb=$("#remember"); rb.classList.toggle("hidden",!inGame(a)); rb.textContent=SAVED[a.ref]?"Sign-in remembered ✓":"Remember sign-in";
+  $("#switch-back").classList.toggle("hidden",!CANUNDO||STATUS.game_running);
   $("#signin").title=SAVED[a.ref]?`Switch to ${fullId(a)} in one click`:"Sign in — opens Riot Client";
   $("#signin-t").textContent=SAVED[a.ref]?"Sign in 🔑":"Sign in"; $("#signin").classList.toggle("one",!!SAVED[a.ref]);
   paintSteps(a);
@@ -302,14 +303,14 @@ async function signIn(){const a=acc(SEL), n=a?fullId(a):"the account";
     confirmBox(`Switch to ${n}?`,"Tune closes Riot Client, signs in to this account with its remembered sign-in, and starts VALORANT.","Switch",async()=>{
       const b=$("#signin");b.classList.add("busy");const r=await call("switch_to",a.ref);b.classList.remove("busy");
       if(!r.ok){toast(r.error||"Couldn't switch.",true);return;}
-      EXPECT=a.ref; toast(`Switching to ${n}… VALORANT is starting.`);});
+      EXPECT=a.ref; CANUNDO=true; toast(`Switching to ${n}… VALORANT is starting.`);});
     return;
   }
   $("#g-name").textContent=n; $("#g-title").textContent=`Set up one-click sign-in for ${n}`;
   const t=await call("tcno_accounts"), names=t.ok&&t.data?t.data.accounts:[]; TCNO=names;
   $("#g-tcno").classList.toggle("hidden",!names.length); $("#g-tcno-s").textContent=`TcNo has ${names.length} saved account${names.length===1?"":"s"} on this PC — use them, no signing in.`;
   $("#gmodal").classList.add("show");}
-let TCNO=[];
+let TCNO=[], CANUNDO=false;
 function saveCurrentClick(){ const a=acc(SEL); if(!a) return; const n=fullId(a); closeGuide();
   confirmBox(`Is Riot Client signed in to ${n} right now?`,`Tune saves Riot Client's current "Stay signed in" as ${n}, encrypted for your Windows user only. If it turns out to be a different account, Tune tells you the first time VALORANT starts.`,"Yes, save it",async()=>{
     const r=await call("remember_signin",a.ref,true); if(!r.ok){toast(r.error||"Couldn't save the sign-in.",true);return;}
@@ -345,6 +346,11 @@ async function importTcno(){
 const closeGuide=()=>$("#gmodal").classList.remove("show");
 async function openRiotFromGuide(){ closeGuide(); const r=await call("launch_riot");
   toast(r.ok?"Riot Client is opening.":(r.error||"Couldn't open Riot Client."),!r.ok); }
+function switchBackClick(){
+  if(STATUS.game_running){toast("Quit VALORANT first — Tune never closes the game for you.",true);return;}
+  confirmBox("Switch back?","Puts Riot Client back on the account it was signed in to before your last switch, and starts VALORANT.","Switch back",async()=>{
+    const r=await call("undo_switch"); if(!r.ok){toast(r.error||"Couldn't switch back.",true);return;}
+    toast("Switching back… VALORANT is starting."); CANUNDO=false; $("#switch-back").classList.add("hidden");});}
 function restoreClick(){const a=acc(SEL);if(!a)return;
   confirmBox("Undo last apply?",`Puts ${riotId(a).name}'s settings files back exactly as they were before the last Apply. VALORANT can stay open unless it's signed in to this account.`,"Undo",async()=>{
     const r=await call("restore_backup",a.ref); if(!r.ok){toast(r.error||"Undo failed.",true);return;}
@@ -360,7 +366,7 @@ async function loadStatus(){
     EXPECT=null; }
   if(JSON.stringify(STATUS)!==old){ACCOUNTS.forEach(paintRow); const a=acc(SEL); if(a){paintSync(a); loadSync(a.ref);}}
 }
-async function loadSaved(){const r=await call("signin_saved"); SAVED=r.ok&&r.data?r.data:{}; ACCOUNTS.forEach(paintRow); const a=acc(SEL); if(a)paintSync(a);}
+async function loadSaved(){const r=await call("signin_saved"); SAVED=r.ok&&r.data?r.data:{}; const u=await call("can_undo_switch"); CANUNDO=!!(u.ok&&u.data); ACCOUNTS.forEach(paintRow); const a=acc(SEL); if(a)paintSync(a);}
 function rememberClick(){const a=acc(SEL); if(!a) return;
   confirmBox(`Remember ${fullId(a)}'s sign-in?`,"Tune saves Riot Client's \"Stay signed in\" file for this account, encrypted so only your Windows user on this PC can use it. Your password is never seen. Then you can switch here in one click.","Remember",async()=>{
     const r=await call("remember_signin",a.ref); if(!r.ok){toast(r.error||"Couldn't remember the sign-in.",true);return;}
@@ -453,7 +459,7 @@ function boot(){
   if(window.__booted)return; window.__booted=1;
   document.querySelectorAll(".tab").forEach(t=>t.onclick=()=>showView(t.dataset.view));
   $("#apply").onclick=applyClick; $("#signin").onclick=signIn; $("#restore").onclick=restoreClick; $("#copy-all").onclick=copyAllClick;
-  $("#remember").onclick=rememberClick; $("#h-forget").onclick=forgetClick; $("#d-close").onclick=closeDrawer; $("#scrim").onclick=closeDrawer;
+  $("#remember").onclick=rememberClick; $("#switch-back").onclick=switchBackClick; $("#h-forget").onclick=forgetClick; $("#d-close").onclick=closeDrawer; $("#scrim").onclick=closeDrawer;
   $("#x-copy").onclick=()=>{const v=VIEW[SEL];if(v&&v.crosshair_code)copyText(v.crosshair_code,"crosshair code — paste it in VALORANT's crosshair import.");};
   $("#x-save").onclick=()=>{const a=acc(SEL),v=VIEW[SEL];if(a&&v&&v.crosshair_code)saveCrosshair(`${fullId(a)} crosshair`,v.crosshair_code);};
   $("#p-code").oninput=pasteChanged; $("#p-save").onclick=pasteSave; $("#p-name").onkeydown=e=>{if(e.key==="Enter"&&!$("#p-save").disabled)pasteSave();};

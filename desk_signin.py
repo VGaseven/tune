@@ -163,11 +163,26 @@ class SignIns:
         if now==old:return False
         self.remember(ref);return True
 
+    PREVIOUS='previous'
+
+    def _keep_previous(self,files):
+        self.dir.mkdir(parents=True,exist_ok=True);path=self.dir/f'{self.PREVIOUS}.last';tmp=path.with_suffix('.tmp')
+        tmp.write_bytes(self.seal(json.dumps({'format':FORMAT,'v':2,'source':'before-switch','files':files}).encode()));tmp.replace(path)
+
+    def has_previous(self):return (self.dir/f'{self.PREVIOUS}.last').exists()
+
+    def undo_switch(self,launch):
+        """Put back the sign-in Riot Client had before the last switch."""
+        path=self.dir/f'{self.PREVIOUS}.last'
+        if not path.exists():raise ValueError('There is no earlier sign-in to go back to.')
+        files=json.loads(self.unseal(path.read_bytes()))['files']
+        return self._restore(files,launch,keep=False)
+
     def forget(self,ref=None):
-        targets=[self._file(ref)] if ref else (list(self.dir.glob('*.bin')) if self.dir.exists() else [])
+        targets=[self._file(ref)] if ref else (list(self.dir.glob('*.bin'))+list(self.dir.glob('*.last')) if self.dir.exists() else [])
         n=0
         for p in targets:
-            try:p.unlink();n+=1
+            try:p.unlink();n+=p.suffix=='.bin'      # count accounts, not the switch-back copy
             except FileNotFoundError:pass
         return {'forgotten':n}
 
@@ -175,7 +190,9 @@ class SignIns:
         """Close Riot Client, restore ref's sign-in, then call launch() to start Riot Client again."""
         path=self._file(ref)
         if not path.exists():raise ValueError('This account has no saved sign-in yet.')
-        files=self._load(ref)
+        return self._restore(self._load(ref),launch,ref=ref)
+
+    def _restore(self,files,launch,ref=None,keep=True):
         if any(n.startswith('valorant') for n in self.procs()):
             raise RuntimeError('Quit VALORANT first - Tune never closes the game for you.')
         if any(n in RIOT_PROCS for n in self.procs()):
@@ -185,6 +202,11 @@ class SignIns:
                 self.sleep(0.25)
             else:raise RuntimeError('Riot Client did not close. Close it from the system tray, then try again.')
             self.sleep(0.5)            # let it finish releasing its files
+        # Keep whatever Riot Client is signed in to right now, so switching can always be undone
+        # (otherwise an account that was never saved would need its password typed again).
+        if keep:
+            try:self._keep_previous(self._snapshot())
+            except RuntimeError:pass
         # Like TcNo: clear Riot Client's Data folder, then put this account's copy in place, so
         # nothing from the previous account is left behind.
         data=self.root/'Data'

@@ -398,6 +398,9 @@ class Backend:
         self._path_for_ref(ref)
         return self.signins.switch(ref,launch)
 
+    def undo_switch(self,launch):return self.signins.undo_switch(launch)
+    def can_undo_switch(self):return self.signins.has_previous()
+
     def forget_signins(self,ref=None):
         return self.signins.forget(ref or None)
 

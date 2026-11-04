@@ -11,7 +11,7 @@ from pathlib import Path
 import tune_backend
 import desk_update
 
-VERSION='7.6'
+VERSION='7.7'
 REPO='https://github.com/VGaseven/tune'
 LATEST_API='https://api.github.com/repos/VGaseven/tune/releases/latest'
 
@@ -154,6 +154,12 @@ class Api:
     def import_tcno(self,pairs):return self._call(self.be.import_tcno,pairs)
     def keep_signin_fresh(self):return self._call(self.be.keep_signin_fresh)
     def forget_signins(self,ref=None):return self._call(self.be.forget_signins,ref)
+    def can_undo_switch(self):return self._call(self.be.can_undo_switch)
+    def undo_switch(self):
+        def go():
+            if not self.be.riot_client():raise RuntimeError('Riot Client was not found on this PC.')
+            return self.be.undo_switch(self._launch)
+        return self._call(go)
     def switch_to(self,ref):
         def go():
             if not self.be.riot_client():raise RuntimeError('Riot Client was not found on this PC.')
