@@ -11,7 +11,7 @@ from pathlib import Path
 import tune_backend
 import desk_update
 
-VERSION='7.4'
+VERSION='7.5'
 REPO='https://github.com/VGaseven/tune'
 LATEST_API='https://api.github.com/repos/VGaseven/tune/releases/latest'
 
@@ -105,7 +105,15 @@ class Api:
                 path=desk_update.update(f'Tune/{VERSION}',progress=prog,newer=lambda tag:newer(tag,VERSION))
                 self._upd={'stage':'restarting'}
                 desk_update.restart(path)
-                import os;threading.Timer(1.2,os._exit,(0,)).start()   # the new Tune is starting; close this one
+                # The new Tune is starting: close this window properly (so its files can be cleaned
+                # up), with a hard exit as a fallback if the window doesn't go away.
+                import os
+                def close():
+                    try:
+                        import webview
+                        for w in list(webview.windows):w.destroy()
+                    except Exception:pass
+                threading.Timer(1.0,close).start();threading.Timer(6.0,os._exit,(0,)).start()
             except Exception as e:
                 self._upd={'stage':'error','error':str(e)}
         threading.Thread(target=run,daemon=True).start()

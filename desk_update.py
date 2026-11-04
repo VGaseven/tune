@@ -108,7 +108,18 @@ def _read(url,agent,timeout=15):
     with urllib.request.urlopen(req,timeout=timeout) as r:return r.read(4096)
 
 
-def restart(exe):
-    """Start the freshly installed Tune and let the caller exit."""
+def clean_env(env=None):
+    """Environment for starting a new Tune.exe from inside a running one. PyInstaller passes its
+    own variables to child processes, which would make the new version reuse this version's
+    unpacked files (old screens with new code). Drop them and ask for a fresh start."""
+    env=dict(os.environ if env is None else env)
+    for k in list(env):
+        if k.startswith('_PYI') or k.startswith('_MEIPASS') or k=='TCL_LIBRARY' or k=='TK_LIBRARY':del env[k]
+    env['PYINSTALLER_RESET_ENVIRONMENT']='1'
+    return env
+
+
+def restart(exe,popen=subprocess.Popen):
+    """Start the freshly installed Tune as a completely separate program; the caller then exits."""
     flags=getattr(subprocess,'DETACHED_PROCESS',0)|getattr(subprocess,'CREATE_NEW_PROCESS_GROUP',0)
-    subprocess.Popen([str(exe)],cwd=str(Path(exe).parent),creationflags=flags,close_fds=True)
+    popen([str(exe)],cwd=str(Path(exe).parent),creationflags=flags,close_fds=True,env=clean_env())

@@ -55,6 +55,15 @@ class Update(unittest.TestCase):
         with mock.patch.object(Path,'replace',flaky),self.assertRaises(OSError):U.install(new,self.exe)
         self.assertEqual(self.exe.read_bytes(),b'MZ old version')
 
+class Restart(unittest.TestCase):
+    def test_new_version_starts_fresh_not_inside_the_old_one(self):
+        env=U.clean_env({'PATH':'x','_MEIPASS2':'C:/old','_PYI_APPLICATION_HOME_DIR':'C:/old','_PYI_PARENT_PROCESS_LEVEL':'1'})
+        self.assertEqual(env['PATH'],'x');self.assertEqual(env['PYINSTALLER_RESET_ENVIRONMENT'],'1')
+        self.assertFalse([k for k in env if k.startswith(('_PYI','_MEIPASS'))])
+        seen={}
+        U.restart(Path('C:/apps/Tune.exe'),popen=lambda args,**kw:seen.update(args=args,**kw))
+        self.assertEqual(seen['args'],[str(Path('C:/apps/Tune.exe'))]);self.assertEqual(seen['env']['PYINSTALLER_RESET_ENVIRONMENT'],'1')
+
 class Icon(unittest.TestCase):
     def test_app_icon_is_a_valid_multi_size_ico(self):
         import struct
