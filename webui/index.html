@@ -31,6 +31,8 @@
     </nav>
     <div class="spacer"></div>
     <div class="search" id="searchbox"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg><input id="search" placeholder="Search  ( / )" autocomplete="off" spellcheck="false"></div>
+    <button class="ubtn" id="btn-update" title="Check for updates">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5"/><path d="M5 20h14"/></svg><span id="upd-label">Update</span><i class="udot hidden" id="upd-dot"></i></button>
     <button class="rbtn" id="btn-help" title="Help &amp; about (H)" aria-label="Help and about">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.6 9.3a2.5 2.5 0 0 1 4.8.9c0 1.7-2.4 2.2-2.4 3.6"/><path d="M12 17.2h.01"/></svg></button>
     <button class="rbtn" id="btn-key" title="Rank &amp; stats key" aria-label="Rank and stats key">
@@ -45,9 +47,57 @@
 
   <!-- ============ ACCOUNTS ============ -->
   <section class="view" id="v-accounts">
-    <div class="vhead"><div><div class="vt">Accounts</div><div class="vs" id="sub">Your accounts</div></div>
-      <button class="btn" id="copy-all" title="Copy one account's settings onto every other account">Copy to all…</button></div>
-    <div class="tiles" id="list"></div>
+    <div class="layout">
+      <div class="col-list">
+        <div class="lhead"><div><div class="sec-t">Accounts</div><div class="vs" id="sub">Your accounts</div></div>
+          <button class="link" id="copy-all" title="Copy one account's settings onto every other account">Copy to all…</button></div>
+        <div class="list" id="list"></div>
+      </div>
+      <aside class="col-detail" id="detail">
+        <button class="rbtn close" id="d-close" title="Close (Esc)" aria-label="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+        <div class="hero" id="hero">
+          <div class="hero-art" id="hero-art"></div>
+          <div class="hero-body">
+            <div class="hero-id" id="d-id" title="Click to copy Riot ID"><span id="d-name">—</span><b id="d-tag"></b><svg class="copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></div>
+            <div class="hero-rank"><img id="d-emblem" class="emblem lg hidden" alt=""><div><div class="rk" id="d-rank">Unavailable</div><div class="rk-sub" id="d-rksub"></div><div class="rrbar hidden" id="d-rrbar"><i id="d-rrfill"></i></div></div></div>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="stat"><div class="s-l">Sensitivity</div><div class="s-v" id="d-sens">—</div><div class="s-n" id="d-sens-n"></div></div>
+          <div class="stat"><div class="s-l">Headshot</div><div class="s-v" id="d-hs">—</div><div class="meter"><i id="d-hs-m"></i></div><div class="s-n" id="d-hs-n"></div></div>
+          <div class="stat"><div class="s-l">Win rate</div><div class="s-v" id="d-wr">—</div><div class="meter mid"><i id="d-wr-m"></i></div><div class="s-n" id="d-wr-n"></div></div>
+        </div>
+
+        <div class="panel">
+          <div class="actions">
+            <button class="apply" id="apply"><span id="apply-t">Apply settings…</span>
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
+            <button class="btn signin" id="signin" title="Sign in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5M15 12H3"/></svg><span id="signin-t">Sign in</span></button>
+            <div class="spacer"></div>
+            <button class="link hidden" id="remember" title="Save this sign-in so you can switch here in one click">Remember sign-in</button>
+            <button class="link hidden" id="restore">Undo last apply</button>
+          </div>
+          <div class="steps" id="steps"></div>
+          <div class="sync" id="sync"><span class="sdot"></span><span id="sync-t">Checking…</span></div>
+        </div>
+
+        <div class="split">
+        <details class="panel fold" id="fold">
+            <summary><div><div class="p-t">Settings details</div><div class="p-s" id="m-sum">Sensitivity, graphics and more</div></div><span class="chev"></span></summary>
+            <div class="rows" id="m-rows"></div>
+          </details>
+  
+          <div class="panel xh">
+            <canvas id="xcanvas" width="150" height="150" class="xcanvas"></canvas>
+            <div class="xh-b"><div class="p-t">Crosshair</div><div class="p-s" id="x-name">—</div>
+              <div class="xh-a"><button class="btn" id="x-copy">Copy code</button><button class="btn" id="x-save">Save to my crosshairs</button></div>
+              <div class="xbgs" id="xbgs"><button data-bg="range">Range</button><button data-bg="sky">Sky</button><button data-bg="sand">Sand</button><button data-bg="dark">Dark</button></div></div>
+          </div>
+      </div>
+      </aside>
+    </div>
   </section>
 
   <!-- ============ CROSSHAIRS ============ -->
@@ -67,51 +117,9 @@
   </section>
 </div>
 
-<!-- ============ ACCOUNT SIDE PANEL ============ -->
+
+
 <div class="scrim" id="scrim"></div>
-<aside class="drawer" id="detail" aria-hidden="true">
-  <button class="rbtn close" id="d-close" title="Close (Esc)" aria-label="Close">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
-  <div class="hero" id="hero">
-    <div class="hero-art" id="hero-art"></div>
-    <div class="hero-body">
-      <div class="hero-id" id="d-id" title="Click to copy Riot ID"><span id="d-name">—</span><b id="d-tag"></b><svg class="copy" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V6a2 2 0 0 1 2-2h9"/></svg></div>
-      <div class="hero-rank"><img id="d-emblem" class="emblem lg hidden" alt=""><div><div class="rk" id="d-rank">Unavailable</div><div class="rk-sub" id="d-rksub"></div><div class="rrbar hidden" id="d-rrbar"><i id="d-rrfill"></i></div></div></div>
-    </div>
-  </div>
-
-  <div class="stats">
-    <div class="stat"><div class="s-l">Sensitivity</div><div class="s-v" id="d-sens">—</div><div class="s-n" id="d-sens-n"></div></div>
-    <div class="stat"><div class="s-l">Headshot</div><div class="s-v" id="d-hs">—</div><div class="meter"><i id="d-hs-m"></i></div><div class="s-n" id="d-hs-n"></div></div>
-    <div class="stat"><div class="s-l">Win rate</div><div class="s-v" id="d-wr">—</div><div class="meter mid"><i id="d-wr-m"></i></div><div class="s-n" id="d-wr-n"></div></div>
-  </div>
-
-  <div class="panel">
-    <div class="actions">
-      <button class="apply" id="apply"><span id="apply-t">Apply settings…</span>
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg></button>
-      <button class="btn signin" id="signin" title="Sign in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><path d="M10 17l5-5-5-5M15 12H3"/></svg><span id="signin-t">Sign in</span></button>
-      <div class="spacer"></div>
-      <button class="link hidden" id="remember" title="Save this sign-in so you can switch here in one click">Remember sign-in</button>
-      <button class="link hidden" id="restore">Undo last apply</button>
-    </div>
-    <div class="steps" id="steps"></div>
-    <div class="sync" id="sync"><span class="sdot"></span><span id="sync-t">Checking…</span></div>
-  </div>
-
-  <details class="panel fold" id="fold">
-    <summary><div><div class="p-t">Settings details</div><div class="p-s" id="m-sum">Sensitivity, graphics and more</div></div><span class="chev"></span></summary>
-    <div class="rows" id="m-rows"></div>
-  </details>
-
-  <div class="panel xh">
-    <canvas id="xcanvas" width="150" height="150" class="xcanvas"></canvas>
-    <div class="xh-b"><div class="p-t">Crosshair</div><div class="p-s" id="x-name">—</div>
-      <div class="xh-a"><button class="btn" id="x-copy">Copy code</button><button class="btn" id="x-save">Save to my crosshairs</button></div>
-      <div class="xbgs" id="xbgs"><button data-bg="range">Range</button><button data-bg="sky">Sky</button><button data-bg="sand">Sand</button><button data-bg="dark">Dark</button></div></div>
-  </div>
-</aside>
-
 <div class="menu hidden" id="xmenu" role="menu"></div>
 <div class="toast" id="toast"></div>
 
@@ -131,6 +139,20 @@
     <div class="pick" id="s-list"></div>
     <div class="m-note">Copies sensitivity, crosshair, graphics and game settings. The account you're copying to is backed up first, so you can undo. VALORANT can stay open, as long as it isn't signed in to that account.</div>
     <div class="m-foot"><button class="btn" id="s-cancel">Cancel</button><button class="btn primary" id="s-ok" disabled>Apply</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="gmodal">
+  <div class="modal">
+    <div class="m-title" id="g-title">Set up one-click sign-in</div>
+    <div class="m-sub">Tune never knows your password, so each account needs to be signed in once. After that it switches in one click, like TcNo.</div>
+    <div class="guide">
+      <div><span>1</span><p>In Riot Client, sign out, then sign in as <b id="g-name">this account</b> with <b>"Stay signed in"</b> ticked.</p></div>
+      <div><span>2</span><p>Start VALORANT.</p></div>
+      <div><span>3</span><p>While it's open, press <b>Remember sign-in</b> on this account in Tune. A 🔑 appears.</p></div>
+      <div><span>✓</span><p>Next time: quit VALORANT, pick any 🔑 account and press <b>Sign in</b>.</p></div>
+    </div>
+    <div class="m-foot"><button class="btn" id="g-close">Close</button><button class="btn primary" id="g-open">Open Riot Client</button></div>
   </div>
 </div>
 

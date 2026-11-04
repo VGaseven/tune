@@ -11,7 +11,7 @@ from pathlib import Path
 import tune_backend
 import desk_update
 
-VERSION='7.3'
+VERSION='7.4'
 REPO='https://github.com/VGaseven/tune'
 LATEST_API='https://api.github.com/repos/VGaseven/tune/releases/latest'
 

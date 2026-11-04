@@ -41,7 +41,8 @@ const RK={iron:"#8d8f94",bronze:"#c08552",silver:"#cfd6de",gold:"#f0c75e",platin
 const rankColor=n=>RK[String(n||"").split(" ")[0].toLowerCase()]||"#8a8f99";
 const inGame=a=>!!(a&&STATUS.game_running&&STATUS.signed_in_ref===a.ref);
 const lastUsed=a=>!!(a&&STATUS.signed_in_ref===a.ref);
-const drawerOpen=()=>$("#detail").classList.contains("open");
+const isWide=()=>matchMedia("(min-width:900px)").matches;   // details sit next to the list; smaller windows slide them over it
+const drawerOpen=()=>isWide()||$("#detail").classList.contains("open");
 function countUp(el,text){ // animate the numeric part of a stat; plain text if not numeric
   const m=/^(-?[0-9.]+)(.*)$/.exec(text||""); if(!m||el.dataset.v===text){el.textContent=text;el.dataset.v=text;return;}
   const to=parseFloat(m[1]),dp=(m[1].split(".")[1]||"").length,from=parseFloat(el.dataset.v)||0,t0=performance.now();el.dataset.v=text;
@@ -56,7 +57,7 @@ function showView(name){
   document.querySelectorAll(".tab").forEach(t=>t.classList.toggle("on",t.dataset.view===name));
   $("#v-accounts").classList.toggle("hidden",name!=="accounts"); $("#v-crosshairs").classList.toggle("hidden",name!=="crosshairs");
   $("#search").placeholder=name==="accounts"?"Search accounts  ( / )":"Search crosshairs  ( / )";
-  if(name==="crosshairs"){closeDrawer(); loadGallery();}
+  if(name==="crosshairs"){if(!isWide())closeDrawer(); loadGallery();}
   applyFilter();
 }
 
@@ -69,30 +70,27 @@ function renderList(){
     list.innerHTML='<div class="empty">No VALORANT accounts on this PC yet.<br>Sign in once in VALORANT and the account appears here.<br><button class="btn primary" id="e-signin">Open Riot Client</button></div>';
     $("#e-signin").onclick=()=>call("launch_riot"); return;
   }
-  ACCOUNTS.forEach((a,i)=>{const el=document.createElement("button");el.className="tile";el.dataset.ref=a.ref;
-    el.style.animationDelay=(i*0.035)+"s";el.onclick=()=>openAccount(a.ref);list.appendChild(el);paintRow(a);});
+  ACCOUNTS.forEach((a,i)=>{const el=document.createElement("div");el.className="acc";el.dataset.ref=a.ref;el.tabIndex=0;el.setAttribute("role","button");
+    el.style.animationDelay=(i*0.035)+"s";el.onclick=()=>openAccount(a.ref);el.onkeydown=e=>{if(e.key==="Enter"){e.stopPropagation();openAccount(a.ref);}};list.appendChild(el);paintRow(a);});
   applyFilter();
 }
 function paintRow(a){
-  const el=document.querySelector(`.tile[data-ref="${a.ref}"]`); if(!el) return;
+  const el=document.querySelector(`.acc[data-ref="${a.ref}"]`); if(!el) return;
   const r=RANK[a.puuid], id=riotId(a), s=SYNC[a.ref], loading=KEY&&!r;
   el.classList.toggle("sel",a.ref===SEL);
   el.style.setProperty("--art",r&&r.card_url?`url("${wide(r.card_url)}")`:"none"); el.style.setProperty("--rk",rankColor(r&&r.rank));
   const src=s&&s.source?acc(s.source):null;
-  const foot=s&&s.source?(s.in_sync?`<span class="ok"><i class="sdot ok"></i>Matches ${esc(src?riotId(src).name:"source")}</span>`
-                                     :`<span class="warn"><i class="sdot warn"></i>${s.differ} changed since apply</span>`):"";
-  el.innerHTML=`<div class="t-art"><div class="t-badges">${inGame(a)?'<span class="pill live">IN GAME</span>':lastUsed(a)?'<span class="pill last">LAST USED</span>':""}${SAVED[a.ref]?'<span class="pill key" title="One-click sign-in remembered">🔑</span>':""}</div>
-      ${r&&r.rank_icon?`<img class="emblem" src="${esc(r.rank_icon)}" alt="">`:""}</div>
-    <div class="t-body"><div class="nm">${esc(id.name)}<b>${esc(id.tag)}</b></div>
-      <div class="rkn">${r&&r.rank?esc(r.rank)+(r.rr!=null&&r.rank!=="Unrated"?` · ${r.rr} RR`:""):loading?"Loading…":"Rank unavailable"}</div>
-      <div class="mini"><span>Sens <b>${esc(fmtSens(a.sens)??"—")}</b></span><span>HS <b>${r&&r.hs!=null?r.hs+"%":loading?"…":"—"}</b></span><span>WR <b>${r&&r.wr!=null?r.wr+"%":loading?"…":"—"}</b></span></div>
-      ${foot?`<div class="t-foot">${foot}</div>`:""}</div>`;
+  const foot=s&&s.source?(s.in_sync?`<div class="a-foot ok"><i class="sdot"></i>Matches ${esc(src?riotId(src).name:"source")}</div>`
+                                    :`<div class="a-foot warn"><i class="sdot"></i>${s.differ} changed since apply</div>`):"";
+  el.innerHTML=`<div class="who"><div class="nm"><span class="id">${esc(id.name)}<b>${esc(id.tag)}</b></span>${SAVED[a.ref]?'<span class="pill key" title="One-click sign-in remembered">🔑</span>':""}${inGame(a)?'<span class="pill live">IN GAME</span>':lastUsed(a)?'<span class="pill last">LAST USED</span>':""}</div>
+      <div class="mini"><span>Sens <b>${esc(fmtSens(a.sens)??"—")}</b></span><span>HS <b>${r&&r.hs!=null?r.hs+"%":loading?"…":"—"}</b></span><span>WR <b>${r&&r.wr!=null?r.wr+"%":loading?"…":"—"}</b></span></div>${foot}</div>
+    <div class="rkbox"><div class="rkn">${r&&r.rank?esc(r.rank)+(r.rr!=null&&r.rank!=="Unrated"?`<small>${r.rr} RR</small>`:""):loading?"…":"Unavailable"}</div>${r&&r.rank_icon?`<img class="emblem" src="${esc(r.rank_icon)}" alt="">`:""}</div>`;
 }
 function applyFilter(){
   const q=($("#search").value||"").trim().toLowerCase();
   if(VIEWNAME==="crosshairs"){ document.querySelectorAll(".xcard").forEach(c=>c.classList.toggle("hidden",!!q&&!c.dataset.name.toLowerCase().includes(q))); return; }
   let shown=0;
-  ACCOUNTS.forEach(a=>{const el=document.querySelector(`.tile[data-ref="${a.ref}"]`); if(!el) return; const r=RANK[a.puuid]||{};
+  ACCOUNTS.forEach(a=>{const el=document.querySelector(`.acc[data-ref="${a.ref}"]`); if(!el) return; const r=RANK[a.puuid]||{};
     const hit=!q||[fullId(a),r.rank,a.region].some(s=>String(s||"").toLowerCase().includes(q)); el.classList.toggle("hidden",!hit); shown+=hit;});
   let n=$("#nohit"); if(!shown&&q){ if(!n){n=document.createElement("div");n.id="nohit";n.className="empty";$("#list").appendChild(n);} n.textContent=`No account matches "${q}".`;} else if(n) n.remove();
 }
@@ -100,12 +98,12 @@ function applyFilter(){
 /* ---------------- side panel ---------------- */
 function openAccount(ref){
   if(!acc(ref)) return; const changed=SEL!==ref; SEL=ref; store.set("tune.sel",ref);
-  document.querySelectorAll(".tile").forEach(e=>e.classList.toggle("sel",e.dataset.ref===ref));
-  const d=$("#detail"); d.classList.add("open"); d.setAttribute("aria-hidden","false"); $("#scrim").classList.add("show");
+  document.querySelectorAll(".acc").forEach(e=>e.classList.toggle("sel",e.dataset.ref===ref));
+  const d=$("#detail"); d.classList.add("open"); if(!isWide())$("#scrim").classList.add("show");
   if(changed){d.scrollTop=0;d.classList.remove("swap");void d.offsetWidth;d.classList.add("swap");$("#signin").classList.remove("ready");}
   paintDetail(); loadSync(ref); loadView(ref);
 }
-function closeDrawer(){ const d=$("#detail"); d.classList.remove("open"); d.setAttribute("aria-hidden","true"); $("#scrim").classList.remove("show"); }
+function closeDrawer(){ $("#detail").classList.remove("open"); $("#scrim").classList.remove("show"); }
 function stat(id,value,note){const v=$("#"+id);if(value==null){v.textContent="Unavailable";v.dataset.v="";}else countUp(v,value);v.classList.toggle("na",value==null);$("#"+id+"-n").textContent=note||"";}
 function paintDetail(){
   const a=acc(SEL); if(!a) return; const r=RANK[a.puuid]||{}, id=riotId(a), v=VIEW[a.ref];
@@ -307,8 +305,10 @@ async function signIn(){const a=acc(SEL), n=a?fullId(a):"the account";
       EXPECT=a.ref; toast(`Switching to ${n}… VALORANT is starting.`);});
     return;
   }
-  const r=await call("launch_riot");
-  toast(r.ok?`Riot Client is opening. Sign in as ${n} with "Stay signed in" ticked, start VALORANT, then press Remember sign-in for one-click switching next time.`:(r.error||"Couldn't open Riot Client."),!r.ok);}
+  $("#g-name").textContent=n; $("#g-title").textContent=`Set up one-click sign-in for ${n}`; $("#gmodal").classList.add("show");}
+const closeGuide=()=>$("#gmodal").classList.remove("show");
+async function openRiotFromGuide(){ closeGuide(); const r=await call("launch_riot");
+  toast(r.ok?"Riot Client is opening.":(r.error||"Couldn't open Riot Client."),!r.ok); }
 function restoreClick(){const a=acc(SEL);if(!a)return;
   confirmBox("Undo last apply?",`Puts ${riotId(a).name}'s settings files back exactly as they were before the last Apply. VALORANT can stay open unless it's signed in to this account.`,"Undo",async()=>{
     const r=await call("restore_backup",a.ref); if(!r.ok){toast(r.error||"Undo failed.",true);return;}
@@ -345,9 +345,19 @@ let UPD=null, SELFUPD=false;
 async function checkUpdate(quiet){
   const r=await call("check_update");
   if(!r.ok){ if(!quiet) toast("Couldn't check for updates. Are you online?",true); return; }
-  const d=r.data||{}; UPD=d;
+  const d=r.data||{}; UPD=d; paintUpdateBtn();
   if(d.newer&&(!quiet||store.get("tune.later")!==d.latest)){$("#upd-t").textContent=`Tune ${d.latest} is out — you have ${d.current}.`;$("#updbar").classList.remove("hidden");}
   if(!quiet){ if(d.newer){$("#hmodal").classList.remove("show");toast(`Tune ${d.latest} is available — press Update now.`);} else toast(`You're on the latest version (${d.current}).`); }
+}
+function paintUpdateBtn(){
+  const b=$("#btn-update"), n=!!(UPD&&UPD.newer);
+  b.classList.toggle("new",n); $("#upd-dot").classList.toggle("hidden",!n);
+  $("#upd-label").textContent=n?`Update to ${UPD.latest}`:"Update"; b.title=n?`Tune ${UPD.latest} is ready to install`:"Check for updates";
+}
+async function updateBtnClick(){
+  if(UPD&&UPD.newer){updateClick();return;}
+  const b=$("#btn-update"); b.classList.add("busy"); $("#upd-label").textContent="Checking…";
+  await checkUpdate(false); b.classList.remove("busy"); paintUpdateBtn();
 }
 function updateClick(){
   if(!UPD||!UPD.newer) return;
@@ -355,7 +365,7 @@ function updateClick(){
   confirmBox(`Update to Tune ${UPD.latest}?`,"Tune downloads the new version from its GitHub page, checks it isn't damaged, then restarts itself. It takes about a minute. Your accounts, settings and backups stay as they are.",
     "Update now",async()=>{
       const r=await call("update_now"); if(!r.ok){toast(r.error||"Couldn't start the update.",true);return;}
-      $("#upd-go").disabled=true; $("#upd-go").textContent="Updating…"; $("#upd-later").classList.add("hidden"); $("#upd-prog").classList.remove("hidden"); pollUpdate();
+      $("#upd-go").disabled=true; $("#upd-go").textContent="Updating…"; $("#updbar").classList.remove("hidden"); $("#btn-update").classList.add("busy"); $("#upd-label").textContent="Updating…"; $("#upd-later").classList.add("hidden"); $("#upd-prog").classList.remove("hidden"); pollUpdate();
     });
 }
 async function pollUpdate(){
@@ -366,7 +376,7 @@ async function pollUpdate(){
   if(s.stage==="restarting"){$("#upd-t").textContent=`Installed ✓ Restarting Tune ${UPD.latest}…`;$("#upd-fill").style.width="100%";return;}
   if(s.stage==="error"){toast(s.error||"The update failed. Nothing was changed.",true);
     $("#upd-t").textContent=`Tune ${UPD.latest} is out — the update didn't finish.`;$("#upd-go").disabled=false;$("#upd-go").textContent="Try again";
-    $("#upd-later").classList.remove("hidden");$("#upd-prog").classList.add("hidden");}
+    $("#upd-later").classList.remove("hidden");$("#upd-prog").classList.add("hidden");$("#btn-update").classList.remove("busy");paintUpdateBtn();}
 }
 
 /* ---------------- rank key ---------------- */
@@ -395,8 +405,9 @@ async function refresh(){
   ACCOUNTS=a.data; KEY=!!(k.ok&&k.data&&k.data.set);
   $("#rankbar").classList.toggle("hidden",KEY);
   renderList(); if(!ACCOUNTS.length) return;
-  const keep=store.get("tune.sel"); if(acc(SEL)||acc(keep)) SEL=acc(SEL)?SEL:keep;
-  if(drawerOpen()&&SEL){ paintDetail(); loadView(SEL); }
+  const keep=store.get("tune.sel"); SEL=acc(SEL)?SEL:acc(keep)?keep:null;
+  if(isWide()){ const first=SEL||(acc(STATUS.signed_in_ref)?STATUS.signed_in_ref:ACCOUNTS[0].ref); SEL=null; openAccount(first); }
+  else if(drawerOpen()&&SEL){ paintDetail(); loadView(SEL); }
   ACCOUNTS.forEach(x=>loadSync(x.ref)); loadRanks(FORCE); FORCE=false; loadStatus(); loadSaved();
   if(VIEWNAME==="crosshairs") loadGallery();
 }
@@ -413,9 +424,12 @@ function boot(){
   $("#s-cancel").onclick=closePick; $("#smodal").onclick=e=>{if(e.target.id==="smodal")closePick();};
   $("#s-ok").onclick=()=>{if(!PICK)return;store.set("tune.src",PICK);closePick();const f=PICKFN;PICKFN=null;if(f)f(PICK);};
   $("#btn-help").onclick=()=>openHelp(false); $("#h-close").onclick=closeHelp; $("#hmodal").onclick=e=>{if(e.target.id==="hmodal")closeHelp();};
-  $("#h-update").onclick=()=>checkUpdate(false); $("#upd-go").onclick=updateClick;
+  $("#h-update").onclick=()=>checkUpdate(false); $("#upd-go").onclick=updateClick; $("#btn-update").onclick=updateBtnClick;
+  $("#g-close").onclick=closeGuide; $("#g-open").onclick=openRiotFromGuide; $("#gmodal").onclick=e=>{if(e.target.id==="gmodal")closeGuide();};
+  addEventListener("resize",()=>{ if(isWide()){ $("#scrim").classList.remove("show"); if(!SEL&&ACCOUNTS.length) openAccount(ACCOUNTS[0].ref); } });
   $("#upd-later").onclick=()=>{if(UPD)store.set("tune.later",UPD.latest);$("#updbar").classList.add("hidden");};
   call("can_self_update").then(r=>{SELFUPD=!!(r.ok&&r.data); if(!SELFUPD)$("#upd-go").textContent="Download";});
+  setInterval(()=>{if(!document.hidden)checkUpdate(true);},6*3600*1000);   // a long session still hears about new versions
   $("#h-backups").onclick=async()=>{const r=await call("open_backups"); if(!r.ok)toast(r.error||"Couldn't open the folder.",true);};
   $("#d-id").onclick=()=>{const a=acc(SEL); if(!a||!RANK[a.puuid]||!RANK[a.puuid].name){toast("Riot ID isn't loaded yet.",true);return;} copyText(fullId(a),fullId(a));};
   $("#search").oninput=applyFilter;
@@ -437,20 +451,21 @@ function boot(){
   addEventListener("keydown",e=>{
     const typing=/INPUT|TEXTAREA/.test((document.activeElement||{}).tagName||""), modal=document.querySelector(".modal-bg.show");
     if(e.key==="Escape"){ closeMenu();
-      if(modal){closeBox();closePick();$("#kmodal").classList.remove("show");if($("#hmodal").classList.contains("show"))closeHelp();return;}
+      if(modal){closeBox();closePick();closeGuide();$("#kmodal").classList.remove("show");if($("#hmodal").classList.contains("show"))closeHelp();return;}
       if(document.activeElement===$("#search")){$("#search").value="";applyFilter();$("#search").blur();return;}
-      if(drawerOpen()){closeDrawer();return;} }
+      if(!isWide()&&drawerOpen()){closeDrawer();return;} }
     if(typing||modal) return;
     if(e.key==="/"){e.preventDefault();$("#search").focus();}
     else if(e.key==="h"||e.key==="H"||e.key==="?") openHelp(false);
     else if(VIEWNAME!=="accounts") return;
     else if((e.key==="s"||e.key==="S")&&drawerOpen()) signIn();
     else if((e.key==="a"||e.key==="A")&&drawerOpen()&&!$("#apply").disabled) applyClick();
-    else if(e.key==="Enter"&&SEL&&!drawerOpen()&&!(document.activeElement||{}).closest?.(".tile")) openAccount(SEL);
+    else if(e.key==="Enter"&&SEL&&!drawerOpen()) openAccount(SEL);
     else if(["ArrowRight","ArrowLeft","ArrowDown","ArrowUp"].includes(e.key)){
-      const vis=ACCOUNTS.filter(a=>{const el=document.querySelector(`.tile[data-ref="${a.ref}"]`);return el&&!el.classList.contains("hidden");}); if(!vis.length) return;
+      const vis=ACCOUNTS.filter(a=>{const el=document.querySelector(`.acc[data-ref="${a.ref}"]`);return el&&!el.classList.contains("hidden");}); if(!vis.length) return;
       const step=e.key==="ArrowRight"||e.key==="ArrowDown"?1:-1, i=vis.findIndex(a=>a.ref===SEL), n=vis[(i+step+vis.length)%vis.length];
-      if(drawerOpen()) openAccount(n.ref); else {SEL=n.ref; document.querySelectorAll(".tile").forEach(t=>t.classList.toggle("sel",t.dataset.ref===SEL)); const el=document.querySelector(`.tile[data-ref="${SEL}"]`); if(el)el.focus();}
+      if(drawerOpen()) openAccount(n.ref); else {SEL=n.ref; document.querySelectorAll(".acc").forEach(t=>t.classList.toggle("sel",t.dataset.ref===SEL));}
+      const el=document.querySelector(`.acc[data-ref="${n.ref}"]`); if(el)el.scrollIntoView({block:"nearest"});
       e.preventDefault(); }
   });
   addEventListener("pointermove",e=>{const s=$(".spot");s.style.setProperty("--x",e.clientX+"px");s.style.setProperty("--y",e.clientY+"px");});
