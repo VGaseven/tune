@@ -23,8 +23,8 @@ file never changes them behind your back.
 No passwords are ever read or stored. No game-memory access, injection, overlays, input automation,
 private Riot APIs or telemetry. Tune never closes VALORANT for you.
 
-**One-click switching is opt-in.** Press *Remember sign-in* while VALORANT is open on an account and
-Tune keeps a copy of Riot Client's own "Stay signed in" files for it, encrypted with Windows (DPAPI,
+**One-click switching is opt-in.** Save an account's current sign-in (or import the ones TcNo Account
+Switcher already saved) and Tune keeps a copy of Riot Client's own "Stay signed in" files for it, encrypted with Windows (DPAPI,
 only readable by your Windows user on this PC). Switching closes Riot Client (never the game), puts
 that copy back and starts Riot Client again. Anyone who could copy those files could sign in as you,
 the same as with TcNo, so keep your PC account safe. *Help → Forget all saved sign-ins* deletes them.

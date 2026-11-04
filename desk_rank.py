@@ -22,7 +22,7 @@ MMR_URL='https://api.henrikdev.xyz/valorant/v3/by-puuid/mmr/{region}/{platform}/
 MATCHES_URL='https://api.henrikdev.xyz/valorant/v1/by-puuid/stored-matches/{region}/{puuid}?mode=competitive&size=20'
 CARD_ART='https://media.valorant-api.com/playercards/{card}/largeart.png'
 TIER_ICON='https://media.valorant-api.com/competitivetiers/03621f52-342b-cf4e-4f86-9350a49c6d04/{tier}/largeicon.png'
-USER_AGENT='Tune/7.5 (+https://github.com/VGaseven/tune)'
+USER_AGENT='Tune/7.6 (+https://github.com/VGaseven/tune)'
 REGIONS=('eu','na','ap','kr','latam','br')
 PLATFORM='pc'
 DEFAULT_KEY=''   # deliberately empty in the public repo; a real key is supplied at runtime (resolve_key).

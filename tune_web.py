@@ -11,7 +11,7 @@ from pathlib import Path
 import tune_backend
 import desk_update
 
-VERSION='7.5'
+VERSION='7.6'
 REPO='https://github.com/VGaseven/tune'
 LATEST_API='https://api.github.com/repos/VGaseven/tune/releases/latest'
 
@@ -104,22 +104,29 @@ class Api:
             try:
                 path=desk_update.update(f'Tune/{VERSION}',progress=prog,newer=lambda tag:newer(tag,VERSION))
                 self._upd={'stage':'restarting'}
-                desk_update.restart(path)
-                # The new Tune is starting: close this window properly (so its files can be cleaned
-                # up), with a hard exit as a fallback if the window doesn't go away.
+                # Start the new Tune where this window is, keep this one up until the new one says
+                # it's showing, then close this one properly (hard exit only as a fallback).
                 import os
-                def close():
-                    try:
-                        import webview
-                        for w in list(webview.windows):w.destroy()
-                    except Exception:pass
-                threading.Timer(1.0,close).start();threading.Timer(6.0,os._exit,(0,)).start()
+                flag=desk_update.handoff_flag();extra={desk_update.HANDOFF:flag}
+                try:
+                    import webview
+                    w=webview.windows[0];extra[desk_update.GEOMETRY]=f'{w.x},{w.y},{w.width},{w.height}'
+                except Exception:pass
+                desk_update.restart(path,extra=extra)
+                desk_update.wait_ready(flag)
+                self._upd={'stage':'handoff'}
+                try:
+                    import webview
+                    for w in list(webview.windows):w.destroy()
+                except Exception:pass
+                threading.Timer(6.0,os._exit,(0,)).start()
             except Exception as e:
                 self._upd={'stage':'error','error':str(e)}
         threading.Thread(target=run,daemon=True).start()
         return {'ok':True,'data':self._upd}
 
     def update_status(self):return {'ok':True,'data':dict(self._upd)}
+    def app_ready(self):return {'ok':True,'data':{'handoff':desk_update.signal_ready()}}
     def can_self_update(self):return {'ok':True,'data':bool(getattr(sys,'frozen',False))}
 
     def open_releases(self):
@@ -142,7 +149,9 @@ class Api:
         return self._call(go)
 
     def signin_saved(self):return self._call(self.be.signin_saved)
-    def remember_signin(self,ref):return self._call(self.be.remember_signin,ref)
+    def remember_signin(self,ref,confirmed=False):return self._call(self.be.remember_signin,ref,bool(confirmed))
+    def tcno_accounts(self):return self._call(self.be.tcno_accounts)
+    def import_tcno(self,pairs):return self._call(self.be.import_tcno,pairs)
     def keep_signin_fresh(self):return self._call(self.be.keep_signin_fresh)
     def forget_signins(self,ref=None):return self._call(self.be.forget_signins,ref)
     def switch_to(self,ref):
@@ -195,8 +204,9 @@ def main():
     if getattr(sys,'frozen',False):desk_update.cleanup(sys.executable)   # remove the old version after an update
     import desk_window,time
     api=Api(tune_backend.Backend());title=f'Tune {VERSION}'
+    geo=desk_update.geometry();place={'x':geo[0],'y':geo[1],'width':geo[2],'height':geo[3]} if geo else {'width':1140,'height':800}
     win=webview.create_window(title,url=str(resource('webui','index.html')),js_api=api,
-                              width=1140,height=800,min_size=(380,500),resizable=True,background_color='#07070c')
+                              min_size=(380,500),resizable=True,background_color='#07070c',**place)
     def dark_titlebar():
         for _ in range(15):                  # the native window can take a moment to get its title
             if desk_window.darken(title):return

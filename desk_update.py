@@ -119,7 +119,43 @@ def clean_env(env=None):
     return env
 
 
-def restart(exe,popen=subprocess.Popen):
+def restart(exe,popen=subprocess.Popen,extra=None):
     """Start the freshly installed Tune as a completely separate program; the caller then exits."""
     flags=getattr(subprocess,'DETACHED_PROCESS',0)|getattr(subprocess,'CREATE_NEW_PROCESS_GROUP',0)
-    popen([str(exe)],cwd=str(Path(exe).parent),creationflags=flags,close_fds=True,env=clean_env())
+    env=clean_env();env.update({k:str(v) for k,v in (extra or {}).items()})
+    popen([str(exe)],cwd=str(Path(exe).parent),creationflags=flags,close_fds=True,env=env)
+
+
+# ---------- smooth hand-over from the old window to the new one ----------
+HANDOFF='TUNE_HANDOFF';GEOMETRY='TUNE_GEOMETRY'
+
+def handoff_flag():
+    import tempfile
+    return Path(tempfile.gettempdir())/f'tune-handoff-{os.getpid()}.ready'
+
+def wait_ready(flag,timeout=45.0,sleep=None,clock=None):
+    """Wait until the new Tune says its window is showing (or give up after timeout)."""
+    import time
+    sleep=sleep or time.sleep;clock=clock or time.monotonic;end=clock()+timeout
+    while clock()<end:
+        if Path(flag).exists():
+            try:Path(flag).unlink()
+            except OSError:pass
+            return True
+        sleep(0.2)
+    return False
+
+def signal_ready(env=None):
+    """Called by the new Tune once its screen is up: tells the old one it can close now."""
+    env=os.environ if env is None else env;flag=env.pop(HANDOFF,None)
+    if not flag or not str(flag).endswith('.ready'):return False
+    try:Path(flag).write_text('ok',encoding='utf-8');return True
+    except OSError:return False
+
+def geometry(env=None):
+    """(x, y, width, height) the old window had, if it was passed on and looks sane; else None."""
+    raw=(os.environ if env is None else env).get(GEOMETRY,'')
+    try:x,y,w,h=(int(float(v)) for v in raw.split(','))
+    except ValueError:return None
+    if not (380<=w<=10000 and 500<=h<=10000 and -10000<x<20000 and -10000<y<20000):return None
+    return x,y,w,h

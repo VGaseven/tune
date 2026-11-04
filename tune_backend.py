@@ -367,13 +367,27 @@ class Backend:
         known={model.source_id(p) for p in self._paths()}
         return {ref:at for ref,at in self.signins.saved().items() if ref in known}
 
-    def remember_signin(self,ref):
-        """Save Riot Client's current sign-in for ref. Only while VALORANT is open on ref, so the
-        copy can't end up under the wrong account."""
+    def remember_signin(self,ref,confirmed=False):
+        """Save Riot Client's current sign-in for ref. Automatic while VALORANT is open on ref;
+        otherwise only when the user confirms Riot Client is signed in to ref (checked again the
+        next time VALORANT starts)."""
         self._path_for_ref(ref);st=self.status()
-        if not (st['game_running'] and st['signed_in_ref']==ref):
-            raise RuntimeError('Start VALORANT on this account first (sign in with "Stay signed in" ticked), then press Remember sign-in.')
+        if st['game_running'] and st['signed_in_ref'] and st['signed_in_ref']!=ref:
+            raise RuntimeError("VALORANT is open on a different account, so Riot Client is signed in to that one, not this one.")
+        if not (st['game_running'] and st['signed_in_ref']==ref) and not confirmed:
+            raise RuntimeError('Sign in to this account in Riot Client first (with "Stay signed in" ticked), then save it.')
         return self.signins.remember(ref)
+
+    def tcno_accounts(self):
+        return {'accounts':self.signins.tcno_accounts()}
+
+    def import_tcno(self,pairs):
+        """pairs: [{'name': TcNo account name, 'ref': Tune account}] - copy each into Tune."""
+        done=[];failed=[]
+        for p in pairs or []:
+            try:self._path_for_ref(p['ref']);self.signins.import_tcno(p['name'],p['ref']);done.append(p['ref'])
+            except Exception as e:failed.append({'name':p.get('name'),'error':str(e)})
+        return {'imported':len(done),'failed':failed}
 
     def keep_signin_fresh(self):
         st=self.status();ref=st['signed_in_ref']

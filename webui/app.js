@@ -305,7 +305,43 @@ async function signIn(){const a=acc(SEL), n=a?fullId(a):"the account";
       EXPECT=a.ref; toast(`Switching to ${n}… VALORANT is starting.`);});
     return;
   }
-  $("#g-name").textContent=n; $("#g-title").textContent=`Set up one-click sign-in for ${n}`; $("#gmodal").classList.add("show");}
+  $("#g-name").textContent=n; $("#g-title").textContent=`Set up one-click sign-in for ${n}`;
+  const t=await call("tcno_accounts"), names=t.ok&&t.data?t.data.accounts:[]; TCNO=names;
+  $("#g-tcno").classList.toggle("hidden",!names.length); $("#g-tcno-s").textContent=`TcNo has ${names.length} saved account${names.length===1?"":"s"} on this PC — use them, no signing in.`;
+  $("#gmodal").classList.add("show");}
+let TCNO=[];
+function saveCurrentClick(){ const a=acc(SEL); if(!a) return; const n=fullId(a); closeGuide();
+  confirmBox(`Is Riot Client signed in to ${n} right now?`,`Tune saves Riot Client's current "Stay signed in" as ${n}, encrypted for your Windows user only. If it turns out to be a different account, Tune tells you the first time VALORANT starts.`,"Yes, save it",async()=>{
+    const r=await call("remember_signin",a.ref,true); if(!r.ok){toast(r.error||"Couldn't save the sign-in.",true);return;}
+    toast(`${n} saved 🔑 — quit VALORANT and press Sign in on any 🔑 account to switch.`); loadSaved();});}
+const norm=s=>String(s||"").toLowerCase().replace(/account|acc|alt|main/g,"").replace(/[^a-z0-9\u0600-\u06ff]+/g,"");
+function guessTcno(a,names){
+  const id=norm(riotId(a).name); if(!id) return "";
+  const exact=names.filter(x=>norm(x)===id); if(exact.length===1) return exact[0];
+  const near=names.filter(x=>{const k=norm(x);return k&&(k.startsWith(id)||id.startsWith(k));});
+  return near.length===1?near[0]:"";
+}
+async function openTcno(){
+  closeGuide(); $("#hmodal").classList.remove("show");
+  const t=await call("tcno_accounts"); TCNO=t.ok&&t.data?t.data.accounts:[];
+  if(!TCNO.length){toast("TcNo has no saved Riot accounts on this PC.",true);return;}
+  const opts=n=>`<option value="">— skip —</option>`+TCNO.map(x=>`<option${x===n?" selected":""}>${esc(x)}</option>`).join("");
+  $("#t-list").innerHTML=ACCOUNTS.map(a=>{const r=RANK[a.puuid]||{};return `<div class="pair" style="--rk:${rankColor(r.rank)}" data-ref="${a.ref}">
+      ${r.rank_icon?`<img class="emblem" src="${esc(r.rank_icon)}" alt="">`:'<span class="emblem ph"></span>'}
+      <span class="pk-n">${esc(riotId(a).name)}<b>${esc(riotId(a).tag)}</b><i>${SAVED[a.ref]?"🔑 already set up — choose one to replace it":esc(r.rank||"")}</i></span>
+      <select>${opts(SAVED[a.ref]?"":guessTcno(a,TCNO))}</select></div>`;}).join("");
+  const sync=()=>{const n=[...document.querySelectorAll("#t-list select")].filter(s=>s.value).length;$("#t-ok").disabled=!n;$("#t-ok").textContent=n?`Import ${n}`:"Import";};
+  document.querySelectorAll("#t-list select").forEach(s=>s.onchange=sync); sync();
+  $("#tmodal").classList.add("show");
+}
+const closeTcno=()=>$("#tmodal").classList.remove("show");
+async function importTcno(){
+  const pairs=[...document.querySelectorAll("#t-list .pair")].map(p=>({ref:p.dataset.ref,name:p.querySelector("select").value})).filter(p=>p.name);
+  const used=pairs.map(p=>p.name); if(new Set(used).size!==used.length){toast("Each TcNo account can only go to one Tune account.",true);return;}
+  closeTcno(); const r=await call("import_tcno",pairs); if(!r.ok){toast(r.error||"Import failed.",true);return;}
+  const d=r.data; toast(`${d.imported} account${d.imported===1?"":"s"} imported 🔑`+(d.failed.length?` · ${d.failed.length} couldn't be read (${d.failed[0].error})`:" — quit VALORANT and press Sign in to switch."),!!d.failed.length);
+  loadSaved();
+}
 const closeGuide=()=>$("#gmodal").classList.remove("show");
 async function openRiotFromGuide(){ closeGuide(); const r=await call("launch_riot");
   toast(r.ok?"Riot Client is opening.":(r.error||"Couldn't open Riot Client."),!r.ok); }
@@ -320,7 +356,7 @@ async function loadStatus(){
     refreshAccounts(); VIEW={}; if(SEL)loadView(SEL); }
   if(STATUS.game_running&&SAVED[STATUS.signed_in_ref]) call("keep_signin_fresh");
   if(EXPECT&&STATUS.game_running&&STATUS.signed_in_ref){ const want=acc(EXPECT);
-    if(STATUS.signed_in_ref!==EXPECT&&want) toast(`Riot signed in to a different account than ${fullId(want)}. Its saved sign-in may have expired: sign in to it once and press Remember sign-in again.`,true);
+    if(STATUS.signed_in_ref!==EXPECT&&want) toast(`Riot signed in to a different account than ${fullId(want)}. Its saved sign-in may have expired or belongs to another account: sign in to it once and save it again.`,true);
     EXPECT=null; }
   if(JSON.stringify(STATUS)!==old){ACCOUNTS.forEach(paintRow); const a=acc(SEL); if(a){paintSync(a); loadSync(a.ref);}}
 }
@@ -373,7 +409,7 @@ async function pollUpdate(){
   if(s.stage==="downloading"){const p=s.total?Math.round(s.got/s.total*100):0;
     $("#upd-t").textContent=`Downloading Tune ${UPD.latest}… ${p}%`;$("#upd-fill").style.width=Math.max(3,p)+"%";setTimeout(pollUpdate,400);return;}
   if(s.stage==="installing"){$("#upd-t").textContent="Installing…";setTimeout(pollUpdate,400);return;}
-  if(s.stage==="restarting"){$("#upd-t").textContent=`Installed ✓ Restarting Tune ${UPD.latest}…`;$("#upd-fill").style.width="100%";return;}
+  if(s.stage==="restarting"||s.stage==="handoff"){$("#upd-t").textContent=`Installed ✓ Opening Tune ${UPD.latest}… this window closes by itself.`;$("#upd-fill").style.width="100%";setTimeout(pollUpdate,700);return;}
   if(s.stage==="error"){toast(s.error||"The update failed. Nothing was changed.",true);
     $("#upd-t").textContent=`Tune ${UPD.latest} is out — the update didn't finish.`;$("#upd-go").disabled=false;$("#upd-go").textContent="Try again";
     $("#upd-later").classList.remove("hidden");$("#upd-prog").classList.add("hidden");$("#btn-update").classList.remove("busy");paintUpdateBtn();}
@@ -403,6 +439,7 @@ async function refresh(){
   const [a,k]=await Promise.all([call("accounts"),call("rank_key_status")]);
   if(!a.ok){$("#list").innerHTML=`<div class="empty">${esc(a.error||"Couldn't read your accounts.")}</div>`;return;}
   ACCOUNTS=a.data; KEY=!!(k.ok&&k.data&&k.data.set);
+  if(!window.__ready){window.__ready=1; setTimeout(()=>call("app_ready"),50);}   // after an update, tells the old window it can close
   $("#rankbar").classList.toggle("hidden",KEY);
   renderList(); if(!ACCOUNTS.length) return;
   const keep=store.get("tune.sel"); SEL=acc(SEL)?SEL:acc(keep)?keep:null;
@@ -425,7 +462,8 @@ function boot(){
   $("#s-ok").onclick=()=>{if(!PICK)return;store.set("tune.src",PICK);closePick();const f=PICKFN;PICKFN=null;if(f)f(PICK);};
   $("#btn-help").onclick=()=>openHelp(false); $("#h-close").onclick=closeHelp; $("#hmodal").onclick=e=>{if(e.target.id==="hmodal")closeHelp();};
   $("#h-update").onclick=()=>checkUpdate(false); $("#upd-go").onclick=updateClick; $("#btn-update").onclick=updateBtnClick;
-  $("#g-close").onclick=closeGuide; $("#g-open").onclick=openRiotFromGuide; $("#gmodal").onclick=e=>{if(e.target.id==="gmodal")closeGuide();};
+  $("#g-close").onclick=closeGuide; $("#g-open").onclick=openRiotFromGuide; $("#g-save").onclick=saveCurrentClick; $("#g-tcno").onclick=openTcno;
+  $("#h-tcno").onclick=openTcno; $("#t-cancel").onclick=closeTcno; $("#t-ok").onclick=importTcno; $("#tmodal").onclick=e=>{if(e.target.id==="tmodal")closeTcno();}; $("#gmodal").onclick=e=>{if(e.target.id==="gmodal")closeGuide();};
   addEventListener("resize",()=>{ if(isWide()){ $("#scrim").classList.remove("show"); if(!SEL&&ACCOUNTS.length) openAccount(ACCOUNTS[0].ref); } });
   $("#upd-later").onclick=()=>{if(UPD)store.set("tune.later",UPD.latest);$("#updbar").classList.add("hidden");};
   call("can_self_update").then(r=>{SELFUPD=!!(r.ok&&r.data); if(!SELFUPD)$("#upd-go").textContent="Download";});
@@ -451,7 +489,7 @@ function boot(){
   addEventListener("keydown",e=>{
     const typing=/INPUT|TEXTAREA/.test((document.activeElement||{}).tagName||""), modal=document.querySelector(".modal-bg.show");
     if(e.key==="Escape"){ closeMenu();
-      if(modal){closeBox();closePick();closeGuide();$("#kmodal").classList.remove("show");if($("#hmodal").classList.contains("show"))closeHelp();return;}
+      if(modal){closeBox();closePick();closeGuide();closeTcno();$("#kmodal").classList.remove("show");if($("#hmodal").classList.contains("show"))closeHelp();return;}
       if(document.activeElement===$("#search")){$("#search").value="";applyFilter();$("#search").blur();return;}
       if(!isWide()&&drawerOpen()){closeDrawer();return;} }
     if(typing||modal) return;

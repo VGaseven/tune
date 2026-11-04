@@ -145,14 +145,23 @@
 <div class="modal-bg" id="gmodal">
   <div class="modal">
     <div class="m-title" id="g-title">Set up one-click sign-in</div>
-    <div class="m-sub">Tune never knows your password, so each account needs to be signed in once. After that it switches in one click, like TcNo.</div>
+    <div class="m-sub">Like TcNo, Tune switches accounts by restoring a saved "Stay signed in". It never sees your password. Each account is saved once.</div>
+    <button class="opt hidden" id="g-tcno"><b>Import from TcNo</b><span id="g-tcno-s">Use the accounts TcNo already saved on this PC — no signing in.</span></button>
+    <button class="opt" id="g-save"><b>Save the current sign-in as <i id="g-name">this account</i></b><span>Use this if Riot Client is signed in to this account right now (with "Stay signed in" ticked).</span></button>
     <div class="guide">
-      <div><span>1</span><p>In Riot Client, sign out, then sign in as <b id="g-name">this account</b> with <b>"Stay signed in"</b> ticked.</p></div>
-      <div><span>2</span><p>Start VALORANT.</p></div>
-      <div><span>3</span><p>While it's open, press <b>Remember sign-in</b> on this account in Tune. A 🔑 appears.</p></div>
-      <div><span>✓</span><p>Next time: quit VALORANT, pick any 🔑 account and press <b>Sign in</b>.</p></div>
+      <div><span>1</span><p>Not signed in to it yet? Press <b>Open Riot Client</b>, sign out, and sign in to it with <b>"Stay signed in"</b> ticked.</p></div>
+      <div><span>2</span><p>Come back and press <b>Save the current sign-in</b> above. A 🔑 appears.</p></div>
     </div>
     <div class="m-foot"><button class="btn" id="g-close">Close</button><button class="btn primary" id="g-open">Open Riot Client</button></div>
+  </div>
+</div>
+
+<div class="modal-bg" id="tmodal">
+  <div class="modal wide">
+    <div class="m-title">Import from TcNo</div>
+    <div class="m-sub">Pick which TcNo account belongs to each of your Tune accounts. Tune copies TcNo's saved sign-in, encrypted, and checks it the first time VALORANT starts. TcNo itself isn't changed.</div>
+    <div class="pairs" id="t-list"></div>
+    <div class="m-foot"><button class="btn" id="t-cancel">Cancel</button><button class="btn primary" id="t-ok" disabled>Import</button></div>
   </div>
 </div>
 
@@ -177,7 +186,7 @@
       <div><span>3</span><b>Sign in &amp; play</b><p>Press Sign in. With a remembered sign-in 🔑 it switches in one click.</p></div>
     </div>
     <div class="faq">
-      <details><summary>How do I switch accounts in one click (like TcNo)?</summary><p>Sign in to the account in Riot Client with "Stay signed in" ticked and start VALORANT. While it's open, press <b>Remember sign-in</b> on that account. From then on, quit VALORANT, open another remembered account and press <b>Sign in</b>. Tune closes Riot Client (never the game), switches, and starts VALORANT.</p></details>
+      <details><summary>How do I switch accounts in one click (like TcNo)?</summary><p>Each account is saved once. If you use TcNo, press <b>Import from TcNo</b> below and pick which TcNo account is which. Otherwise sign in to the account in Riot Client with "Stay signed in" ticked, then press Sign in on it in Tune and choose <b>Save the current sign-in</b>. From then on, quit VALORANT, pick any 🔑 account and press <b>Sign in</b>: Tune closes Riot Client (never the game), switches, and starts VALORANT.</p></details>
       <details><summary>Is a remembered sign-in safe?</summary><p>Tune never sees your password. It keeps a copy of Riot Client's own "Stay signed in" file, the same thing TcNo does. It's encrypted so only your Windows user on this PC can use it. Anyone using your Windows account could still sign in with it, so lock your PC. "Forget saved sign-ins" below deletes them all.</p></details>
       <details><summary>How do I use a crosshair code?</summary><p>Open the Crosshairs tab, press Copy on one (or paste a code from a website or a friend and save it). In VALORANT go to Settings → Crosshair, press <b>Import profile code</b> and paste.</p></details>
       <details><summary>My settings changed back after I signed in. Why?</summary><p>Riot keeps an online copy of sensitivity and crosshair and may restore it when you sign in. Tune checks again and marks the account as changed. Press Apply again with VALORANT closed or on another account.</p></details>
@@ -185,7 +194,7 @@
     </div>
     <div class="keys"><span><kbd>←</kbd><kbd>→</kbd> pick account</span><span><kbd>Enter</kbd> open</span><span><kbd>A</kbd> apply</span><span><kbd>S</kbd> sign in</span><span><kbd>/</kbd> search</span><span><kbd>Esc</kbd> close</span></div>
     <div class="m-foot spread"><div class="about" id="h-ver">Tune</div>
-      <div><button class="btn" id="h-forget">Forget saved sign-ins</button><button class="btn" id="h-backups">Open backups folder</button><button class="btn" id="h-update">Check for updates</button><button class="btn primary" id="h-close">Got it</button></div></div>
+      <div><button class="btn" id="h-tcno">Import from TcNo</button><button class="btn" id="h-forget">Forget saved sign-ins</button><button class="btn" id="h-backups">Open backups folder</button><button class="btn" id="h-update">Check for updates</button><button class="btn primary" id="h-close">Got it</button></div></div>
   </div>
 </div>
 

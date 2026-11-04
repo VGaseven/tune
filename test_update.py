@@ -64,6 +64,21 @@ class Restart(unittest.TestCase):
         U.restart(Path('C:/apps/Tune.exe'),popen=lambda args,**kw:seen.update(args=args,**kw))
         self.assertEqual(seen['args'],[str(Path('C:/apps/Tune.exe'))]);self.assertEqual(seen['env']['PYINSTALLER_RESET_ENVIRONMENT'],'1')
 
+class Handoff(unittest.TestCase):
+    def test_new_window_signals_and_old_one_sees_it(self):
+        with tempfile.TemporaryDirectory() as d:
+            flag=Path(d)/'tune-handoff-1.ready';env={U.HANDOFF:str(flag)}
+            self.assertFalse(U.wait_ready(flag,timeout=0.05,sleep=lambda s:None))
+            self.assertTrue(U.signal_ready(env));self.assertNotIn(U.HANDOFF,env)
+            self.assertTrue(U.wait_ready(flag,timeout=1));self.assertFalse(flag.exists())
+            self.assertFalse(U.signal_ready({}));self.assertFalse(U.signal_ready({U.HANDOFF:str(Path(d)/'evil.exe')}))
+    def test_geometry_passes_only_sane_values(self):
+        self.assertEqual(U.geometry({U.GEOMETRY:'100,50,1140,800'}),(100,50,1140,800))
+        for bad in ('','1,2,3','0,0,10,10','a,b,c,d'):self.assertIsNone(U.geometry({U.GEOMETRY:bad}))
+    def test_restart_passes_handoff_to_the_new_tune(self):
+        seen={};U.restart(Path('C:/apps/Tune.exe'),popen=lambda a,**kw:seen.update(kw),extra={U.HANDOFF:'x.ready',U.GEOMETRY:'1,2,900,700'})
+        self.assertEqual(seen['env'][U.HANDOFF],'x.ready');self.assertEqual(seen['env']['PYINSTALLER_RESET_ENVIRONMENT'],'1')
+
 class Icon(unittest.TestCase):
     def test_app_icon_is_a_valid_multi_size_ico(self):
         import struct
